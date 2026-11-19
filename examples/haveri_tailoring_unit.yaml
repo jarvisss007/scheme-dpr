@@ -1,0 +1,45 @@
+# Illustrative case (not a real applicant): SC-category tailoring and uniform unit
+# in a Haveri village. Exercises special-category rural rates (35% subsidy, 5% own
+# contribution) and the ₹10 lakh CMEGP band. Figures are placeholders for a demo.
+name: Uniform and garment stitching unit, Hangal taluk
+idea: >
+  Stitching of school uniforms and simple garments on job work for traders in Haveri and
+  Hubballi, plus retail tailoring for the village.
+activity:
+  sector: manufacturing
+  tags: [tailoring]
+  new_unit: true
+  nic_description: "14101 - Manufacture of all types of textile garments"
+location:
+  district: Haveri
+  taluk: Hangal
+  area: rural
+applicant:
+  categories: [sc]
+  age: 29
+  education: "PUC"
+  udyam_registered: false
+setup_cost:
+  items:
+    - {name: Industrial sewing machines, qty: 8, unit: machines, rate: 0.28}
+    - {name: Overlock and button machines, amount: 1.1}
+    - {name: "Cutting table, iron and racks", amount: 0.6}
+    - {name: Shed repair and wiring, amount: 1.0}
+  contingency_pct: 0.05
+  working_capital: 1.2
+revenue:
+  - {name: Uniform sets (job work), per_day: 45, price_rs: 70, cogs_pct: 0.15, primary: true}
+  - {name: Retail tailoring orders, per_day: 6, price_rs: 250, cogs_pct: 0.10}
+costs:
+  staff: {count: 6, monthly_lakh: 0.11}
+  rent_annual_lakh: 0.6
+  electricity: {kwh_per_day: 15, rate_rs: 8.0}
+  other:
+    - {name: "Needles, thread and repairs", amount: 0.6}
+finance:
+  interest_rate: 0.11
+  tenor_years: 5
+  moratorium_months: 6
+market_notes: >
+  Two uniform traders in Haveri have offered job work at about the rates assumed; demand is
+  seasonal, peaking before the school year starts in June.

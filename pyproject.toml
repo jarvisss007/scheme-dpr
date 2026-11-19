@@ -1,0 +1,28 @@
+[project]
+name = "scheme-dpr"
+version = "0.1.0"
+description = "Turn a small-business idea in Karnataka into a scheme-matched, bank-ready project report (DPR) with a live 5-year financial model."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6",
+    "pydantic>=2.5",
+    "openpyxl>=3.1",
+    "anthropic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+scheme-dpr = "scheme_dpr.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["scheme_dpr*"]
+
+[tool.setuptools.package-data]
+scheme_dpr = ["data/*.yaml", "locales/*.yaml", "render/*.js"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["libreoffice: needs LibreOffice headless (soffice) installed"]

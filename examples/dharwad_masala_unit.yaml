@@ -1,0 +1,50 @@
+# Illustrative case (not a real applicant): woman-led spice grinding and packing
+# unit in Dharwad city. Exercises the PMFME path (food processing, 35% capped at
+# ₹10 lakh) against PMEGP special-category urban rates. Figures are placeholders
+# for a demo, not market research.
+name: Shakti Masala - spice grinding and packing unit, Dharwad
+idea: >
+  Grinding, blending and packing of chilli, turmeric, coriander and mixed masala powders
+  in 100 g to 1 kg packs, sold to kirana shops and hotels in Dharwad and Hubballi.
+activity:
+  sector: manufacturing
+  tags: [food_processing]
+  new_unit: true
+  nic_description: "10795 - Manufacture of spices and condiments"
+location:
+  district: Dharwad
+  village_or_town: Dharwad
+  area: urban
+  site_description: Rented ground-floor shed of about 800 sq ft in an industrial area, with three-phase power.
+applicant:
+  categories: [women]
+  age: 34
+  education: "SSLC (10th pass)"
+  udyam_registered: true
+setup_cost:
+  items:
+    - {name: Pulveriser and blender (2 sets), amount: 4.5}
+    - {name: Roaster and destoner, amount: 1.8}
+    - {name: Pouch packing and sealing machine, amount: 2.2}
+    - {name: Weighing scales and racks, amount: 0.6}
+    - {name: Shed electrical work and dust control, amount: 1.2}
+    - {name: Licences (FSSAI) and trade mark, amount: 0.3}
+  contingency_pct: 0.05
+  working_capital: 1.5
+revenue:
+  - {name: Masala packs (kg), per_day: 45, price_rs: 320, cogs_pct: 0.68, primary: true}
+  - {name: Custom grinding for hotels (kg), per_day: 40, price_rs: 25, cogs_pct: 0.10}
+costs:
+  staff: {count: 4, monthly_lakh: 0.13}
+  rent_annual_lakh: 1.2
+  electricity: {kwh_per_day: 60, rate_rs: 9.0}
+  other:
+    - {name: Repairs and consumables, amount: 0.8}
+    - {name: Marketing and transport, amount: 1.5}
+finance:
+  interest_rate: 0.105
+  tenor_years: 6
+  moratorium_months: 6
+market_notes: >
+  The promoter has supplied home-made masala to about 30 kirana shops in Dharwad for two
+  years and has verbal interest from four hotels for custom grinding.

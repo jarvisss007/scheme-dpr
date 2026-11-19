@@ -1,0 +1,11 @@
+# Kannada strings - TRANSLATION IN PROGRESS.
+# Any key missing here falls back to English (see scheme_dpr/i18n.py), so the
+# report always renders. List what is still untranslated with:
+#   python -m scheme_dpr i18n-missing kn
+# Every translated string must be checked by a native Kannada speaker familiar
+# with DIC / bank terminology before reports are issued in Kannada.
+
+yes_word: "ಹೌದು"
+
+dpr:
+  doc_type: "ವಿವರವಾದ ಯೋಜನಾ ವರದಿ"
