@@ -3,7 +3,7 @@
 Turn a small-business idea in Karnataka into a **bank-ready government-scheme application pack**:
 
 1. **Scheme match:** PMEGP, PMFME, Karnataka CMEGP, SMAM, Karnataka Tourism (wayside amenities), Mudra and CGTMSE, each checked rule by rule. The output gives subsidy %, cap, own contribution, the source of every rule, and a "verify with DIC / bank" flag.
-2. **5-year financial model (.xlsx):** live formulas with blue inputs, covering sales, costs, EBITDA, loan schedule, DSCR, break-even and payback. LibreOffice recalculates it headless, and the tool checks it cell by cell against an independent Python model.
+2. **5-year financial model (.xlsx):** live formulas with blue inputs, covering sales, costs, EBITDA, loan schedule, DSCR, break-even, payback and a Year-1 month-by-month cash budget. LibreOffice recalculates it headless, and the tool checks it cell by cell against an independent Python model.
 3. **Detailed Project Report (.docx + .md):** in the usual PMEGP / bank section order, with promoter placeholders, a documents checklist and a declaration.
 
 > **A human must review every report before it is submitted.** As of 18 Nov 2026, PMEGP is awaiting approval to continue past 31 Mar 2026 and PMFME has lapsed. The tool flags both.
@@ -54,6 +54,7 @@ python -m scheme_dpr i18n-missing kn             # strings still to translate in
 | Year-3 sales / EBITDA | ₹112.62 / ₹26.31 lakh |
 | DSCR | Y1 **1.28x** (below the 1.3x norm, so the report flags it), then 4.19x to 10.40x |
 | Payback / break-even | Own money back in Year 2; 57 meals a day against a plan of 120 |
+| Year 1 month by month | Cash goes **negative from month 2 to month 8** while sales ramp up, lowest −₹1.05 lakh in month 5. The annual model hides this; the report asks for a cash-credit limit or more opening cash |
 
 Ruled out, with reasons: PMFME (food service is not food processing; the scheme also lapsed on 30 Sep 2026), CMEGP (reported discontinued since FY 2020-21; ₹10 lakh cap), SMAM (not farm machinery), the Tourism wayside subsidy (minimum eligible cost ₹2 crore) and Mudra (a ₹17.9 lakh loan needs Tarun Plus, which needs a repaid Tarun loan). Open points flagged: **PMEGP itself is awaiting continuation**, since its approved period ended 31 Mar 2026 and no approval had been found as of 18 Nov 2026; applicant age and education; Udyam registration; and the words "liquor" and "tobacco" in the idea text.
 
@@ -101,7 +102,7 @@ See `example.yaml`; every field is documented in `scheme_dpr/models.py`. Main bl
 ## Tests
 
 ```bash
-python -m pytest -q        # 111 tests; LibreOffice and Node tests skip if the tools are missing
+python -m pytest -q        # 118 tests; LibreOffice and Node tests skip if the tools are missing
 ```
 
 * `test_finance.py`: every line of the worked example, moratorium splits, subsidy caps, zero-loan and loss years, input validation.
@@ -112,13 +113,13 @@ python -m pytest -q        # 111 tests; LibreOffice and Node tests skip if the t
 
 * **Scheme data needs a human owner.** Rules file v2026.11.2 was re-checked against official texts on 18 Nov 2026. These were confirmed: the PMEGP guidelines of 07.12.2023, the PIB release on PMFME, the Karnataka Tourism Policy 2024-29 book, the SMAM guidelines of Dec 2025, the Mudra gazette of Oct 2024, and the CGTMSE ₹10 crore ceiling. Two **status** facts are the weak point. PMEGP's continuation after 31 Mar 2026 rests on one news report of a Rajya Sabha reply plus no approval found; PMFME's lapse after 30 Sep 2026 rests on a secondary source. CMEGP's discontinuation is from a secondary site (the official portal was unreachable). CGTMSE coverage bands, PMFME's ODOP rule for new units, and what counts as a "wayside amenity" remain unconfirmed.
 * **The Claude path is tested with fakes, not live.** The narrative and `draft` calls use the official `anthropic` SDK (`claude-opus-5-5`, structured JSON output, server-side refusal fallback), but this repo's tests never hit the API. Without credentials the tool uses template text and says so in the report.
-* Annual model (no monthly cash flow), simple tax rate, single proprietorship, Karnataka only, one capital subsidy per project.
+* Annual model for Years 1-5 with a monthly view of Year 1 only (monthly interest; no monthly tax), simple tax rate, single proprietorship, Karnataka only, one capital subsidy per project.
 * Kannada: the framework is in place; only a couple of strings are translated, and they need native review.
 
 ## What would make it a product (not just a tool)
 
 1. **Five real reports with real consultants.** Sit with two DIC-empanelled consultants or PMFME resource persons in Haveri / Dharwad, run their last few cases through it, and measure time saved and what the bank or DIC sent back. That is the only validation that matters.
 2. **A named owner for `schemes.yaml`**, with a monthly check of the PMEGP / PMFME portals and Karnataka circulars, and a changelog. Stale scheme terms are the main way this tool can hurt someone.
-3. **Bank-format extras**: CMA-style monthly cash flow for Year 1, assets schedule and WDV tax depreciation. (A sensitivity table for volume, price and cost shocks is already in section 7.)
+3. **Bank-format extras**: assets schedule and WDV tax depreciation, a full CMA data format. (A Year-1 monthly cash budget is already in.) (A sensitivity table for volume, price and cost shocks is already in section 7.)
 4. **Kannada output** reviewed by a native speaker who knows DIC terminology.
 5. A simple web form in front of the YAML for consultants who don't edit files.

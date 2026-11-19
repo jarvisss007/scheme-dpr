@@ -182,3 +182,57 @@ def test_sensitivity(example):
     assert rows["price_-10"].year3_ebitda < rows["base"].year3_ebitda
     assert rows["costs_+10"].year3_ebitda < rows["base"].year3_ebitda
     assert example.revenue[0].per_day == 120  # input not mutated
+
+
+# ---------------------------------------------------------------- Year 1 monthly
+
+
+def test_monthly_year1_adds_up_to_annual(example):
+    m = build_model(example, 0.10, 0.25)
+    y1, mo = m.years[0], m.monthly
+    assert len(mo) == 12
+    assert sum(r.revenue for r in mo) == pytest.approx(y1.revenue)
+    assert sum(r.cogs for r in mo) == pytest.approx(y1.cogs)
+    assert sum(r.running_costs for r in mo) == pytest.approx(y1.running_costs)
+    assert sum(r.principal for r in mo) == pytest.approx(y1.principal)
+    assert sum(r.interest for r in mo) < y1.interest  # monthly on the falling balance
+    assert mo[0].cash_open == example.setup_cost.working_capital
+    assert all(a.cash_close == pytest.approx(b.cash_open) for a, b in zip(mo, mo[1:]))
+
+
+def test_worked_example_runs_short_of_cash_in_year1(example):
+    """The annual model hides it: with sales ramping through Year 1, cash dips below zero."""
+    m = build_model(example, 0.10, 0.25)
+    low, month = m.lowest_cash
+    assert low == pytest.approx(-1.0470, abs=1e-4)
+    assert month == 5
+
+
+def test_flat_profile_spreads_evenly(make_project):
+    m = build_model(make_project(**{"assumptions.year1_monthly_profile": [1] * 12}), 0.10, 0.25)
+    assert all(r.revenue == pytest.approx(m.years[0].revenue / 12) for r in m.monthly)
+
+
+def test_profile_is_rescaled(make_project):
+    a = build_model(make_project(**{"assumptions.year1_monthly_profile": [1] * 6 + [3] * 6}), 0.10, 0.25)
+    b = build_model(make_project(**{"assumptions.year1_monthly_profile": [2] * 6 + [6] * 6}), 0.10, 0.25)
+    assert [r.revenue for r in a.monthly] == pytest.approx([r.revenue for r in b.monthly])
+    assert a.monthly[11].revenue > a.monthly[0].revenue
+    # a fixed income line does not follow the profile
+    fee = "Fee from fuel station for running its toilets"
+    assert a.monthly[0].revenue_by_stream[fee] == a.monthly[11].revenue_by_stream[fee]
+
+
+def test_monthly_moratorium(make_project):
+    m = build_model(make_project(**{"finance.moratorium_months": 6}), 0.10, 0.25)
+    assert [r.principal > 0 for r in m.monthly] == [False] * 6 + [True] * 6
+    assert sum(r.principal for r in m.monthly) == pytest.approx(m.years[0].principal)
+
+
+@pytest.mark.parametrize("profile", [[1] * 11, [1] * 11 + [0]])
+def test_profile_validation(example_data, profile):
+    from scheme_dpr.models import Project
+
+    example_data["assumptions"]["year1_monthly_profile"] = profile
+    with pytest.raises(ValidationError):
+        Project.model_validate(example_data)

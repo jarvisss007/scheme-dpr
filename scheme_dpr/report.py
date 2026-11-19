@@ -271,6 +271,16 @@ def build_report(p: Project, m: ModelResult, ev: Evaluation, narr: Narrative, s:
                  [[s(f"dpr.sens.{x.key}"), lakh(x.year3_ebitda), times(x.min_dscr), times(x.avg_dscr),
                    s("dpr.year_n", n=x.payback_year) if x.payback_year else s("dpr.beyond5")] for x in sens],
                  bold_rows=[0])]
+    mo = m.monthly
+    blocks += [H(s("dpr.monthly_title"), 2), P(s("dpr.monthly_intro"), "note"),
+               T([s("dpr.month"), s("dpr.m.sales"), s("dpr.m.materials"), s("dpr.m.running"), s("xlsx.interest"),
+                  s("xlsx.principal"), s("dpr.m.net"), s("dpr.m.cash")],
+                 [[str(r.month), lakh(r.revenue), lakh(r.cogs), lakh(r.running_costs), lakh(r.interest),
+                   lakh(r.principal), lakh(r.net_cash), lakh(r.cash_close)] for r in mo])]
+    short = [r.month for r in mo if r.cash_close < 0]
+    if short:
+        low, when = m.lowest_cash  # type: ignore[misc]
+        blocks.append(P(s("dpr.cash_gap", first=short[0], last=short[-1], low=lakh(-low), month=when), "warning"))
     below = [r.year for r in y if r.dscr is not None and r.dscr < a.min_dscr]
     if below:
         blocks.append(P(s("dpr.dscr_warning", years=", ".join(str(x) for x in below), norm=times(a.min_dscr)), "warning"))
@@ -337,6 +347,9 @@ def computed_risks(p: Project, m: ModelResult, ev: Evaluation, s: Strings) -> li
         out.append(s("risk.landlord", pct=pct(p.costs.revenue_share_pct)))
     if m.payback_year is None:
         out.append(s("risk.no_payback"))
+    if m.lowest_cash and m.lowest_cash[0] < 0:
+        short = [r.month for r in m.monthly if r.cash_close < 0]
+        out.append(s("risk.cash_gap", first=short[0], last=short[-1], low=lakh(-m.lowest_cash[0]), month=m.lowest_cash[1]))
     if ev.selected:
         for r in ev.selected.to_verify:
             out.append(s("risk.scheme_open", scheme=ev.selected.name, text=r.text, detail=r.detail))

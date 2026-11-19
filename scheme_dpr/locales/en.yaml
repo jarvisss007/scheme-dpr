@@ -188,6 +188,23 @@ dpr:
     price_-10: Prices 10% lower
     costs_+10: Running costs 10% higher
 
+  monthly_title: Year 1 month by month
+  monthly_intro: >-
+    Sales ramp up through Year 1 (see the Year 1 monthly sheet for the profile); fixed costs and
+    loan payments start at once. Opening cash is the working-capital provision. Interest is
+    monthly on the falling balance; tax is left to the annual figures.
+  month: Month
+  m:
+    sales: Sales
+    materials: Materials
+    running: Running costs
+    net: Net cash
+    cash: Cash at month end
+  cash_gap: >-
+    Cash runs short from month {first} to month {last} of Year 1, lowest at -₹{low} lakh in month
+    {month}. Ask the bank for a cash-credit or overdraft limit of at least ₹{low} lakh plus a
+    margin, or bring in more own money before opening.
+
   role: Role
   number: Number
   emp:
@@ -226,6 +243,7 @@ risk:
   concentration: "{stream} is {share} of Year-3 sales; a fall in that line hits profit directly."
   landlord: "{pct} of sales is paid to the site owner; the agreement must be written, registered and long enough to cover the loan period."
   no_payback: "Own money is not recovered within five years."
+  cash_gap: "Cash runs short in months {first}-{last} of Year 1 (lowest -₹{low} lakh in month {month}) while sales ramp up; arrange a cash-credit / overdraft limit of at least that amount, or more opening cash."
   scheme_open: "{scheme}: {text} - {detail}."
   no_scheme: "No capital subsidy is assumed; check whether a scheme fits before applying."
 
@@ -368,6 +386,20 @@ xlsx:
   open_points: Failed (✗) and to-verify (?) points
   source: Source
   used_in_model: used in model
+  monthly_title: Year 1 month by month (₹ lakh)
+  monthly_hint: "Blue row: relative sales level by month (rescaled to average 1, so Year-1 totals match the Model sheet). Interest is monthly on the falling balance; tax is in the annual model."
+  month: Month
+  year1_total: Year 1
+  profile_raw: Sales level (input)
+  profile: Sales level (average = 1)
+  loan_open_m: Loan balance, start of month
+  loan_close_m: Loan balance, end of month
+  net_cash: NET CASH FLOW
+  cash_open: Cash, start of month
+  cash_close: CASH, END OF MONTH
+  lowest_cash: Lowest month-end cash
+  lowest_cash_month: In month
+  readme_monthly: "Year 1 monthly sheet: the first year month by month, to show whether cash runs short while sales ramp up."
   readme_inputs: "Inputs sheet: change any blue cell; the Model sheet recalculates."
   readme_model: "Model sheet: set-up cost, means of finance, 5-year profit and loss, loan schedule, DSCR, payback and break-even."
   readme_schemes: "Schemes sheet: which schemes were checked, the result, and the source of each rule."

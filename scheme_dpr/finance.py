@@ -68,6 +68,24 @@ class YearRow:
 
 
 @dataclass
+class MonthRow:
+    month: int
+    weight: float
+    revenue_by_stream: dict[str, float]
+    revenue: float
+    cogs: float
+    running_costs: float
+    ebitda: float
+    loan_open: float
+    interest: float
+    principal: float
+    loan_close: float
+    net_cash: float
+    cash_open: float
+    cash_close: float
+
+
+@dataclass
 class ModelResult:
     setup_items: list[tuple[str, float]]
     capex_subtotal: float
@@ -79,6 +97,14 @@ class ModelResult:
     payback_year: int | None = None
     breakeven_units_per_day: float | None = None
     breakeven_unit_name: str | None = None
+    monthly: list[MonthRow] = field(default_factory=list)  # Year 1, month by month
+
+    @property
+    def lowest_cash(self) -> tuple[float, int] | None:
+        if not self.monthly:
+            return None
+        low = min(self.monthly, key=lambda r: r.cash_close)
+        return low.cash_close, low.month
 
     @property
     def dscr_values(self) -> list[float]:
@@ -190,7 +216,45 @@ def build_model(p: Project, own_pct: float, subsidy_pct: float, subsidy_cap: flo
 
     res.payback_year = next((y.year for y in res.years if y.cumulative_cash >= 0), None)
     res.breakeven_units_per_day, res.breakeven_unit_name = breakeven(p, res)
+    res.monthly = monthly_year1(p, res)
     return res
+
+
+def monthly_year1(p: Project, res: ModelResult) -> list[MonthRow]:
+    """Year 1 month by month, the way a bank's cash-budget (CMA) schedule looks at it.
+
+    Volume lines follow ``assumptions.monthly_weights``; fixed income and fixed costs are
+    spread evenly, so the twelve months add up to the annual Year-1 figures. Interest is
+    charged monthly on the falling balance, so it is slightly below the annual model's
+    (opening-balance) figure. Opening cash is the working-capital provision. Tax is
+    left to the annual model.
+    """
+    y1 = res.years[0]
+    f, c = p.finance, p.costs
+    w = p.assumptions.monthly_weights
+    share_streams = [s.name for s in p.revenue if s.revenue_share]
+    share_base_y1 = sum(y1.revenue_by_stream[n] for n in share_streams)
+    fixed_costs_month = (y1.running_costs - c.revenue_share_pct * share_base_y1) / 12
+    monthly_principal = res.finance.net_loan / (f.tenor_years * 12 - f.moratorium_months)
+
+    rows: list[MonthRow] = []
+    loan = res.finance.net_loan
+    cash = p.setup_cost.working_capital
+    for i in range(12):
+        month = i + 1
+        rev = {s.name: y1.revenue_by_stream[s.name] * (w[i] if s.is_volume else 1.0) / 12 for s in p.revenue}
+        revenue = sum(rev.values())
+        cogs = sum(rev[s.name] * s.cogs_pct for s in p.revenue)
+        running = fixed_costs_month + c.revenue_share_pct * sum(rev[n] for n in share_streams)
+        ebitda = revenue - cogs - running
+        interest = loan * f.interest_rate / 12
+        principal = min(loan, monthly_principal) if month > f.moratorium_months else 0.0
+        close = loan - principal
+        net = ebitda - interest - principal
+        rows.append(MonthRow(month, w[i], rev, revenue, cogs, running, ebitda, loan, interest, principal, close,
+                             net, cash, cash + net))
+        loan, cash = close, cash + net
+    return rows
 
 
 def breakeven(p: Project, res: ModelResult) -> tuple[float | None, str | None]:

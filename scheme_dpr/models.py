@@ -194,6 +194,23 @@ class Assumptions(Strict):
     inflation: float = 0.05
     days_per_year: int = 365
     min_dscr: float = 1.3  # what banks look for
+    # Relative sales level for months 1-12 of Year 1 (volume lines only). Rescaled to
+    # average 1, so Year-1 totals still equal the annual model. Default: a straight-line
+    # ramp from 0.6 to 1.4 of the Year-1 average.
+    year1_monthly_profile: list[float] | None = None
+
+    @field_validator("year1_monthly_profile")
+    @classmethod
+    def _twelve_positive(cls, v: list[float] | None) -> list[float] | None:
+        if v is not None and (len(v) != 12 or any(x <= 0 for x in v)):
+            raise ValueError("year1_monthly_profile needs 12 positive numbers")
+        return v
+
+    @property
+    def monthly_weights(self) -> list[float]:
+        raw = self.year1_monthly_profile or [0.6 + 0.8 * i / 11 for i in range(12)]
+        mean = sum(raw) / 12
+        return [x / mean for x in raw]
 
 
 class Project(Strict):

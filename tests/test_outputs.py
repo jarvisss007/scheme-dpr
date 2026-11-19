@@ -39,7 +39,8 @@ def analysed(example):
 def test_workbook_has_live_formulas_and_blue_inputs(analysed):
     p, ev, m = analysed
     wb, cm = build_workbook(p, m, ev, EN)
-    assert wb.sheetnames == ["Read me", "Inputs", "Model", "Schemes"]
+    assert wb.sheetnames == ["Read me", "Inputs", "Model", "Year 1 monthly", "Schemes"]
+    assert str(wb["Year 1 monthly"][f"F{cm.monthly['cash_close']}"].value).startswith("=")
     model = wb["Model"]
     for key in ("project_cost", "own", "subsidy", "net_loan", "min_dscr", "payback_year", "breakeven"):
         assert str(model[cm.scalars[key].split("!")[1]].value).startswith("="), key
@@ -84,6 +85,7 @@ def test_markdown_sections_in_pmegp_order(analysed):
     assert positions == sorted(positions)
     assert "DRAFT FOR HUMAN REVIEW" in md
     assert "19.89" in md and "1.28x" in md and "below the usual bank norm" in md
+    assert "Year 1 month by month" in md and "Cash runs short from month 2 to month 8" in md
     assert "[ to be filled ]" in md  # promoter placeholders
 
 

@@ -49,6 +49,7 @@ class CellMap:
 
     scalars: dict[str, str] = field(default_factory=dict)  # key -> "Model!B14"
     rows: dict[str, int] = field(default_factory=dict)  # key -> row on Model (years in B..F)
+    monthly: dict[str, int] = field(default_factory=dict)  # key -> row on "Year 1 monthly" (months in B..M)
 
 
 class _Inputs:
@@ -88,11 +89,13 @@ def build_workbook(p: Project, m: ModelResult, ev: Evaluation, s: Strings) -> tu
     # "Inputs" and "Model" are referenced inside formulas, so they are not translated.
     wi = wb.create_sheet("Inputs")
     wm = wb.create_sheet("Model")
+    wmo = wb.create_sheet(MONTHLY_SHEET)
     wsch = wb.create_sheet(s("xlsx.sheet_schemes"))
 
     cm = CellMap()
     rows = _write_inputs(wb, wi, p, m, ev, s)
     _write_model(wm, p, m, s, cm, rows)
+    _write_monthly(wmo, p, m, s, cm, rows)
     _write_schemes(wsch, ev, s)
     _write_readme(readme, p, ev, s)
     wb.active = 2  # open on the Model sheet
@@ -389,6 +392,104 @@ def _write_model(ws, p: Project, m: ModelResult, s: Strings, cm: CellMap, rows: 
     ws.freeze_panes = "B3"
 
 
+# ---------------------------------------------------------------- Year 1 monthly
+
+MONTHLY_SHEET = "Year 1 monthly"  # referenced by the checks below; not translated
+MONTH_COLS = [get_column_letter(2 + i) for i in range(12)]  # B..M
+
+
+def _write_monthly(ws, p: Project, m: ModelResult, s: Strings, cm: CellMap, rows: InputRows) -> None:
+    ws.column_dimensions["A"].width = 40
+    for col in MONTH_COLS + ["N"]:
+        ws.column_dimensions[col].width = 10
+    ws.cell(1, 1, f"{p.name} - {s('xlsx.monthly_title')}").font = TITLE
+    ws.cell(2, 1, s("xlsx.monthly_hint"))
+    r = 4
+    ws.cell(r, 1, s("xlsx.month")).font = BOLD
+    for i, col in enumerate(MONTH_COLS):
+        ws[f"{col}{r}"] = i + 1
+        ws[f"{col}{r}"].font = BOLD
+        ws[f"{col}{r}"].fill = HEAD_FILL
+    ws.cell(r, 14, s("xlsx.year1_total")).font = BOLD
+    mrow = r
+    r += 1
+    raw = r
+    ws.cell(r, 1, s("xlsx.profile_raw"))
+    weights_in = p.assumptions.year1_monthly_profile or [0.6 + 0.8 * i / 11 for i in range(12)]
+    for col, v in zip(MONTH_COLS, weights_in):
+        c = ws[f"{col}{r}"]
+        c.value = v
+        c.font, c.fill, c.number_format = BLUE, INPUT_FILL, "0.000"
+    r += 1
+    wrow = r
+    ws.cell(r, 1, s("xlsx.profile"))
+    for col in MONTH_COLS:
+        ws[f"{col}{r}"] = f"={col}{raw}/AVERAGE($B${raw}:$M${raw})"
+        ws[f"{col}{r}"].number_format = "0.000"
+    cm.monthly["weight"] = r
+    r += 1
+
+    def mrow_(key, text, fx, bold=False, total=True, fmt=LAKH_FMT):
+        nonlocal r
+        ws.cell(r, 1, text).font = BOLD if bold else Font()
+        for col in MONTH_COLS:
+            ws[f"{col}{r}"] = fx(col)
+            ws[f"{col}{r}"].number_format = fmt
+            if bold:
+                ws[f"{col}{r}"].font = BOLD
+        if total:
+            ws.cell(r, 14, f"=SUM(B{r}:M{r})").number_format = fmt
+        cm.monthly[key] = r
+        r += 1
+        return r - 1
+
+    srow = {}
+    for st, ir in zip(p.revenue, rows.revenue):
+        yrow = cm.rows[f"rev:{st.name}"]
+        if st.is_volume:
+            fx = lambda col, yrow=yrow: f"=Model!$B${yrow}*{col}${wrow}/12"
+        else:
+            fx = lambda col, yrow=yrow: f"=Model!$B${yrow}/12"
+        srow[st.name] = (mrow_(f"rev:{st.name}", st.name, fx), ir)
+    first, last = min(v[0] for v in srow.values()), max(v[0] for v in srow.values())
+    sales = mrow_("revenue", s("xlsx.total_revenue"), lambda col: f"=SUM({col}{first}:{col}{last})", True)
+    cogs = mrow_("cogs", s("xlsx.cogs"), lambda col: "=" + "+".join(f"{col}{row}*Inputs!$D${ir}" for row, ir in srow.values()))
+    share = [srow[x.name][0] for x in p.revenue if x.revenue_share]
+    run_y1 = f"Model!$B${cm.rows['running_costs']}"
+    if share:
+        base_y1 = "+".join(f"Model!$B${cm.rows['rev:' + x.name]}" for x in p.revenue if x.revenue_share)
+        fx_run = lambda col: (f"=({run_y1}-revenue_share_pct*({base_y1}))/12"
+                              f"+revenue_share_pct*({'+'.join(f'{col}{row}' for row in share)})")
+    else:
+        fx_run = lambda col: f"={run_y1}/12"
+    run = mrow_("running_costs", s("xlsx.running_total"), fx_run)
+    ebitda = mrow_("ebitda", "EBITDA", lambda col: f"={col}{sales}-{col}{cogs}-{col}{run}", True)
+
+    net_loan = "Model!" + cm.scalars["net_loan"].split("!")[1].replace("B", "$B$")
+    lo = r
+    mrow_("loan_open", s("xlsx.loan_open_m"),
+          lambda col: f"={net_loan}" if col == "B" else f"={MONTH_COLS[MONTH_COLS.index(col) - 1]}{lo + 3}", total=False)
+    intr = mrow_("interest", s("xlsx.interest"), lambda col: f"={col}{lo}*interest_rate/12")
+    prin = mrow_("principal", s("xlsx.principal"),
+                 lambda col: f"=IF({col}${mrow}>moratorium,MIN({col}{lo},{net_loan}/(tenor*12-moratorium)),0)")
+    mrow_("loan_close", s("xlsx.loan_close_m"), lambda col: f"={col}{lo}-{col}{prin}", total=False)
+    net = mrow_("net_cash", s("xlsx.net_cash"), lambda col: f"={col}{ebitda}-{col}{intr}-{col}{prin}", True)
+    co = r
+    mrow_("cash_open", s("xlsx.cash_open"),
+          lambda col: "=working_capital" if col == "B" else f"={MONTH_COLS[MONTH_COLS.index(col) - 1]}{co + 1}", total=False)
+    close = mrow_("cash_close", s("xlsx.cash_close"), lambda col: f"={col}{co}+{col}{net}", True, total=False)
+    r += 1
+    ws.cell(r, 1, s("xlsx.lowest_cash")).font = BOLD
+    ws.cell(r, 2, f"=MIN(B{close}:M{close})").number_format = LAKH_FMT
+    ws.cell(r, 2).font = BOLD
+    cm.scalars["lowest_cash"] = f"'{MONTHLY_SHEET}'!B{r}"
+    r += 1
+    ws.cell(r, 1, s("xlsx.lowest_cash_month")).font = BOLD
+    ws.cell(r, 2, f"=INDEX(B{mrow}:M{mrow},MATCH(B{r-1},B{close}:M{close},0))")
+    cm.scalars["lowest_cash_month"] = f"'{MONTHLY_SHEET}'!B{r}"
+    ws.freeze_panes = "B5"
+
+
 # ---------------------------------------------------------------- Schemes / Read me
 
 
@@ -427,6 +528,7 @@ def _write_readme(ws, p: Project, ev: Evaluation, s: Strings) -> None:
         ("", None),
         (s("xlsx.readme_inputs"), None),
         (s("xlsx.readme_model"), None),
+        (s("xlsx.readme_monthly"), None),
         (s("xlsx.readme_schemes"), None),
         (s("xlsx.readme_units"), None),
         ("", None),
@@ -504,8 +606,8 @@ def verify_against_model(path: Path, m: ModelResult, cm: CellMap, tol: float = 1
     ws = wb["Model"]
 
     def val(ref):
-        sheet, cell = ref.split("!")
-        return wb[sheet][cell].value
+        sheet, cell = ref.rsplit("!", 1)
+        return wb[sheet.strip("'")][cell].value
 
     expect_scalar = {
         "project_cost": m.project_cost, "contingency": m.contingency, "own": m.finance.own,
@@ -513,6 +615,8 @@ def verify_against_model(path: Path, m: ModelResult, cm: CellMap, tol: float = 1
         "min_dscr": m.min_dscr, "avg_dscr": m.avg_dscr,
         "payback_year": m.payback_year if m.payback_year is not None else "> 5",
         "breakeven": m.breakeven_units_per_day,
+        "lowest_cash": m.lowest_cash[0] if m.lowest_cash else None,
+        "lowest_cash_month": m.lowest_cash[1] if m.lowest_cash else None,
     }
     problems = []
     for k, exp in expect_scalar.items():
@@ -545,6 +649,14 @@ def verify_against_model(path: Path, m: ModelResult, cm: CellMap, tol: float = 1
                     problems.append(f"{key} Y{i+1}: workbook {got!r} vs model blank")
             elif not _close(got, exp, tol):
                 problems.append(f"{key} Y{i+1}: workbook {got!r} vs model {exp!r}")
+    wmo = wb[MONTHLY_SHEET]
+    for key, row in cm.monthly.items():
+        for i, col in enumerate(MONTH_COLS):
+            mo = m.monthly[i]
+            exp = mo.revenue_by_stream[key[4:]] if key.startswith("rev:") else getattr(mo, key)
+            got = wmo[f"{col}{row}"].value
+            if not _close(got, exp, tol):
+                problems.append(f"monthly {key} M{i+1}: workbook {got!r} vs model {exp!r}")
     return problems
 
 
