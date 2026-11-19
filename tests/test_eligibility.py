@@ -35,7 +35,8 @@ def test_worked_example_selects_pmegp_25pct_rural_general(example):
     assert ev.selected.id == "pmegp"
     assert ev.selected.subsidy_pct == 0.25
     assert ev.selected.own_pct == 0.10
-    assert ev.selected.verdict is Verdict.VERIFY  # age/education unknown, scheme window
+    assert ev.selected.verdict is Verdict.VERIFY  # age/education unknown, continuation pending
+    assert ev.selected.status_state == "pending_continuation"
     assert ev.selected.subsidy_amount == pytest.approx(19.8875 * 0.25)
 
 
@@ -45,7 +46,7 @@ def test_worked_example_rules_out_the_right_schemes(example):
     assert ev["cmegp"].verdict is Verdict.NOT_ELIGIBLE  # ₹19.89 lakh > ₹10 lakh
     assert ev["smam"].verdict is Verdict.NOT_ELIGIBLE
     assert ev["mudra"].verdict is Verdict.NOT_ELIGIBLE  # Tarun Plus needs a repaid Tarun loan
-    assert ev["ka_tourism_wayside"].subsidy_amount == 0  # rate unconfirmed -> planned at 0
+    assert ev["ka_tourism_wayside"].verdict is Verdict.NOT_ELIGIBLE  # minimum eligible cost ₹2 crore
     assert ev["cgtmse"].verdict is Verdict.VERIFY  # Udyam to do
 
 
@@ -123,10 +124,49 @@ def test_existing_unit_is_not_eligible(make_project):
     assert rule(run(make_project(**{"activity.new_unit": False})), "pmegp", "new_unit").status is Status.FAIL
 
 
-def test_scheme_window(make_project):
+def test_scheme_window_check(make_project, rules):
+    """The date-based check stays available for schemes with a known end date."""
+    changed = copy.deepcopy(rules)
+    pm = next(s for s in changed["schemes"] if s["id"] == "pmegp")
+    pm["rules"].append({"id": "window", "check": "scheme_window", "params": {"approved_until": "2026-03-31"},
+                        "text": "Approved period", "source": "https://example.org", "as_of": "2026-01-01",
+                        "confidence": "confirmed"})
     p = make_project()
-    assert rule(run(p, when=date(2026, 1, 15)), "pmegp", "window").status is Status.VERIFY  # unconfirmed rule
-    assert "ended" in rule(run(p, when=date(2026, 11, 18)), "pmegp", "window").detail
+    assert rule(run(p, rules=changed, when=date(2026, 1, 15)), "pmegp", "window").status is Status.PASS
+    assert rule(run(p, rules=changed, when=date(2026, 11, 18)), "pmegp", "window").status is Status.VERIFY
+
+
+def with_status(rules, scheme_id, state, confidence="confirmed"):
+    changed = copy.deepcopy(rules)
+    s = next(x for x in changed["schemes"] if x["id"] == scheme_id)
+    s["status"] = {**s["status"], "state": state, "confidence": confidence}
+    return changed
+
+
+@pytest.mark.parametrize("state,status,verdict", [
+    ("active", Status.PASS, None),
+    ("pending_continuation", Status.VERIFY, Verdict.VERIFY),
+    ("lapsed", Status.VERIFY, Verdict.VERIFY),
+    ("discontinued", Status.FAIL, Verdict.NOT_ELIGIBLE),
+])
+def test_scheme_status_is_the_first_check(make_project, rules, state, status, verdict):
+    ev = run(make_project(**{"applicant.age": 30, "applicant.education": "SSLC", "applicant.udyam_registered": True,
+                             "idea": "A highway meals kiosk."}),
+             rules=with_status(rules, "pmegp", state))
+    r = by_id(ev)["pmegp"]
+    assert r.rules[0].id == "status" and r.rules[0].status is status
+    assert r.verdict is (verdict or Verdict.ELIGIBLE)
+
+
+def test_active_but_unconfirmed_status_is_verify(make_project, rules):
+    ev = run(make_project(), rules=with_status(rules, "pmegp", "active", "unconfirmed"))
+    assert by_id(ev)["pmegp"].rules[0].status is Status.VERIFY
+
+
+def test_discontinued_cmegp_is_never_selected(make_project):
+    ev = run(make_project(**{"applicant.categories": ["women"], "applicant.age": 30}), cost=8.0)
+    assert by_id(ev)["cmegp"].verdict is Verdict.NOT_ELIGIBLE
+    assert ev.selected.id == "pmegp"
 
 
 # ---------------------------------------------------------------- CMEGP / PMFME / SMAM
@@ -144,13 +184,55 @@ def test_cmegp_only_in_karnataka(make_project):
     assert rule(ev, "cmegp", "state").status is Status.FAIL
 
 
-def test_pmfme_selected_for_food_processing_when_larger(make_project):
+def test_pmfme_selected_for_food_processing_when_live_and_larger(make_project, rules):
     p = make_project(**{"activity.tags": ["food_processing"], "activity.sector": "manufacturing"})
-    ev = run(p, cost=15.0)
+    live = with_status(rules, "pmfme", "pending_continuation")  # same footing as PMEGP
+    ev = run(p, rules=live, cost=15.0)
     assert ev.selected.id == "pmfme"  # 35% of 15 = 5.25 beats PMEGP 25% of 15 = 3.75
-    big = run(p, cost=45.0)
+    big = run(p, rules=live, cost=45.0)
     assert by_id(big)["pmfme"].subsidy_amount == 10  # cap
     assert big.selected.id == "pmegp"  # 25% of 45 = 11.25 beats the ₹10 lakh cap
+
+
+def test_lapsed_pmfme_loses_to_pmegp_awaiting_continuation(make_project):
+    p = make_project(**{"activity.tags": ["food_processing"], "activity.sector": "manufacturing"})
+    ev = run(p, cost=15.0)
+    assert by_id(ev)["pmfme"].subsidy_amount > by_id(ev)["pmegp"].subsidy_amount
+    assert ev.selected.id == "pmegp"  # a lapsed scheme is ranked below one awaiting continuation
+
+
+def test_pmegp_working_capital_limit(make_project):
+    ok = run(make_project())
+    assert rule(ok, "pmegp", "working_capital").status is Status.PASS
+    heavy = run(make_project(**{"setup_cost.working_capital": 12.0}))  # ~39% of cost: within 60% for service
+    assert rule(heavy, "pmegp", "working_capital").status is Status.PASS
+    too_much = run(make_project(**{"setup_cost.working_capital": 30.0}))  # ~62% of cost
+    assert rule(too_much, "pmegp", "working_capital").status is Status.FAIL
+
+
+def test_tourism_rules(make_project):
+    ev = run(make_project(), cost=250.0)
+    assert rule(ev, "ka_tourism_wayside", "min_epc").status is Status.PASS
+    assert by_id(ev)["ka_tourism_wayside"].subsidy_amount == pytest.approx(62.5)
+    women = run(make_project(**{"applicant.categories": ["women"]}), cost=250.0)
+    assert by_id(women)["ka_tourism_wayside"].subsidy_pct == 0.30  # +5% for women
+    huge = run(make_project(), cost=1000.0)
+    assert by_id(huge)["ka_tourism_wayside"].subsidy_amount == 200  # cap
+    blr = run(make_project(**{"location.district": "Bengaluru Urban"}), cost=250.0)
+    assert rule(blr, "ka_tourism_wayside", "not_bengaluru").status is Status.FAIL
+
+
+def test_smam_chc_rate_is_40pct_for_every_category(make_project):
+    ev = run(make_project(**{"activity.tags": ["custom_hiring_centre"], "applicant.categories": ["women"]}))
+    assert by_id(ev)["smam"].subsidy_pct == 0.40
+    ev = run(make_project(**{"activity.tags": ["farm_machinery"], "applicant.categories": ["women"]}))
+    assert by_id(ev)["smam"].subsidy_pct == 0.50
+
+
+def test_cmegp_cap_depends_on_group(make_project):
+    gen = by_id(run(make_project(), cost=10.0))["cmegp"]
+    sp = by_id(run(make_project(**{"applicant.categories": ["sc"]}), cost=10.0))["cmegp"]
+    assert (gen.subsidy_amount, sp.subsidy_amount) == (2.5, 3.5)
 
 
 def test_smam_needs_farm_machinery(make_project):
@@ -230,6 +312,14 @@ def test_rules_file_validation(rules):
     bad = copy.deepcopy(rules)
     del bad["schemes"][0]["rules"][0]["source"]
     with pytest.raises(ValueError, match="missing"):
+        validate_rules(bad)
+    bad = copy.deepcopy(rules)
+    del bad["schemes"][0]["status"]["source"]
+    with pytest.raises(ValueError, match="status missing"):
+        validate_rules(bad)
+    bad = copy.deepcopy(rules)
+    bad["schemes"][0]["status"]["state"] = "maybe"
+    with pytest.raises(ValueError, match="status.state"):
         validate_rules(bad)
     bad = copy.deepcopy(rules)
     bad["schemes"][0]["rules"][0]["online) is needed"] = None  # the unquoted-comma trap

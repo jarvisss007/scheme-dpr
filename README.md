@@ -6,7 +6,8 @@ Turn a small-business idea in Karnataka into a **bank-ready government-scheme ap
 2. **5-year financial model (.xlsx):** live formulas with blue inputs, covering sales, costs, EBITDA, loan schedule, DSCR, break-even and payback. LibreOffice recalculates it headless, and the tool checks it cell by cell against an independent Python model.
 3. **Detailed Project Report (.docx + .md):** in the usual PMEGP / bank section order, with promoter placeholders, a documents checklist and a declaration.
 
-> **A human must review every report before it is submitted.** The tool drafts and cross-checks. It does not replace the consultant, CA or resource person who signs off. Scheme terms change often; confirm them with the District Industries Centre (DIC), the implementing agency and the bank.
+> **A human must review every report before it is submitted.** As of 18 Nov 2026, PMEGP is awaiting approval to continue past 31 Mar 2026 and PMFME has lapsed. The tool flags both.
+> The tool drafts and cross-checks. It does not replace the consultant, CA or resource person who signs off. Scheme terms change often; confirm them with the District Industries Centre (DIC), the implementing agency and the bank.
 
 **Who it is for:** district consultants, CAs and PMFME / PMEGP resource persons who write these reports by hand today, usually from a stale Excel template and a Word file.
 
@@ -54,9 +55,9 @@ python -m scheme_dpr i18n-missing kn             # strings still to translate in
 | DSCR | Y1 **1.28x** (below the 1.3x norm, so the report flags it), then 4.19x to 10.40x |
 | Payback / break-even | Own money back in Year 2; 57 meals a day against a plan of 120 |
 
-Ruled out, with reasons: PMFME (food service is not food processing), CMEGP (₹10 lakh cap), SMAM (not farm machinery), Mudra (a ₹17.9 lakh loan needs Tarun Plus, which needs a repaid Tarun loan). Open points flagged: applicant age and education, the word "liquor" in the idea text, and PMEGP's approval period, which ended 31 Mar 2026 (continuation to be confirmed).
+Ruled out, with reasons: PMFME (food service is not food processing; the scheme also lapsed on 30 Sep 2026), CMEGP (reported discontinued since FY 2020-21; ₹10 lakh cap), SMAM (not farm machinery), the Tourism wayside subsidy (minimum eligible cost ₹2 crore) and Mudra (a ₹17.9 lakh loan needs Tarun Plus, which needs a repaid Tarun loan). Open points flagged: **PMEGP itself is awaiting continuation**, since its approved period ended 31 Mar 2026 and no approval had been found as of 18 Nov 2026; applicant age and education; Udyam registration; and the words "liquor" and "tobacco" in the idea text.
 
-`examples/` has two more illustrative cases: a woman-led spice unit (PMFME path, ₹10 lakh cap) and an SC-category tailoring unit (special-category rates).
+`examples/` has two more illustrative cases: a woman-led spice unit and an SC-category tailoring unit (special-category rates, 5% own contribution). The spice unit would get more from PMFME (35%) than PMEGP (25%), but the tool picks PMEGP because PMFME has lapsed. A live scheme always ranks above one awaiting continuation, and both rank above a lapsed one.
 
 ---
 
@@ -84,7 +85,7 @@ project.yaml ──► models.py (pydantic: validates every input)
 Design rules the code enforces:
 
 * **Numbers are computed in code, never by the model.** Claude gets pre-formatted facts and writes the description, market, operations and business-risk sections. `check_numbers` rejects any section containing a figure that is not in the facts. Ratio risks (DSCR below norm, break-even cushion, revenue concentration) are written by code.
-* **Scheme terms live only in `scheme_dpr/data/schemes.yaml`.** Each rule has `source`, `as_of` and `confidence` (`confirmed` / `single_source` / `unconfirmed`). An unconfirmed rule can never return a clean pass. A test fails if subsidy rates or caps appear in `eligibility.py`, and another shows that editing the YAML changes the result.
+* **Scheme terms live only in `scheme_dpr/data/schemes.yaml`.** Each scheme has a `status` (active / pending_continuation / lapsed / unverified / discontinued) with its own source. Each rule has `source`, `as_of` and `confidence` (`confirmed` / `single_source` / `unconfirmed`). Status is always the first check: a discontinued scheme fails, and a pending or lapsed one shows as *Verify* and ranks below live schemes. An unconfirmed rule can never return a clean pass. A test fails if subsidy rates or caps appear in `eligibility.py`, and another shows that editing the YAML changes the result.
 * **Two independent implementations of the model.** The workbook formulas and `finance.py` are written separately and must agree after LibreOffice recalculates. That check caught a real moratorium bug during development.
 * **Unknown is not pass.** Missing age, education or Udyam status shows as *Verify*. One-per-family and EDP training show as *Applicant to declare*.
 * **Text is separate from code.** All user-facing strings are in `scheme_dpr/locales/en.yaml`; `kn.yaml` falls back to English key by key, so Kannada can be added a string at a time.
@@ -100,16 +101,16 @@ See `example.yaml`; every field is documented in `scheme_dpr/models.py`. Main bl
 ## Tests
 
 ```bash
-python -m pytest -q        # 100 tests; LibreOffice and Node tests skip if the tools are missing
+python -m pytest -q        # 111 tests; LibreOffice and Node tests skip if the tools are missing
 ```
 
 * `test_finance.py`: every line of the worked example, moratorium splits, subsidy caps, zero-loan and loss years, input validation.
-* `test_eligibility.py`: PMEGP rate table (general/special × rural/urban, special-area districts), caps by sector, negative list, age and education, scheme windows, CMEGP age by category, PMFME vs PMEGP selection including the ₹10 lakh cap, Mudra tiers, Udyam as a to-do, forced and "none" scheme, rules-file validation.
+* `test_eligibility.py`: scheme status (each state, ranking, discontinued never selected), PMEGP rate table (general/special × rural/urban, special-area districts), caps by sector, working-capital share, negative list, age and education, CMEGP age and caps by category, PMFME vs PMEGP selection including the ₹10 lakh cap, Tourism minimum cost / +5% / Bengaluru exclusion, SMAM CHC rate, Mudra tiers, Udyam as a to-do, forced and "none" scheme, rules-file validation.
 * `test_outputs.py`: workbook formulas and blue inputs; recalculated workbook equals the Python model (with and without moratorium); DPR section order; .docx content; the narrative number guard; fallback when Claude is unavailable; Kannada fallback; CLI.
 
 ## Limits (v1, stated plainly)
 
-* **Scheme data needs a human owner.** Terms come from public 2025-26 sources. PMEGP's approved period ran to 31 Mar 2026 and PMFME's extension to 30 Sep 2026 (PMFME 2.0 proposed, unconfirmed), so the tool flags both as "verify". CMEGP, SMAM and the Tourism wayside incentive are partly `single_source` / `unconfirmed`; the tourism subsidy is planned at 0% until its rate is confirmed.
+* **Scheme data needs a human owner.** Rules file v2026.11.2 was re-checked against official texts on 18 Nov 2026. These were confirmed: the PMEGP guidelines of 07.12.2023, the PIB release on PMFME, the Karnataka Tourism Policy 2024-29 book, the SMAM guidelines of Dec 2025, the Mudra gazette of Oct 2024, and the CGTMSE ₹10 crore ceiling. Two **status** facts are the weak point. PMEGP's continuation after 31 Mar 2026 rests on one news report of a Rajya Sabha reply plus no approval found; PMFME's lapse after 30 Sep 2026 rests on a secondary source. CMEGP's discontinuation is from a secondary site (the official portal was unreachable). CGTMSE coverage bands, PMFME's ODOP rule for new units, and what counts as a "wayside amenity" remain unconfirmed.
 * **The Claude path is tested with fakes, not live.** The narrative and `draft` calls use the official `anthropic` SDK (`claude-opus-5-5`, structured JSON output, server-side refusal fallback), but this repo's tests never hit the API. Without credentials the tool uses template text and says so in the report.
 * Annual model (no monthly cash flow), simple tax rate, single proprietorship, Karnataka only, one capital subsidy per project.
 * Kannada: the framework is in place; only a couple of strings are translated, and they need native review.

@@ -1,28 +1,47 @@
 # Scheme rules — the only place scheme terms live. Code never hard-codes them,
 # prompts never contain them. Update this file (and bump `version`) when terms change.
 #
-# Every rule carries `source` and `as_of`. `confidence` is one of:
-#   confirmed      - read on an official page/guideline
-#   single_source  - one public source, not the official text
+# Every scheme has a `status` block and every rule carries `source` and `as_of`.
+# `confidence` is one of:
+#   confirmed      - read in an official text (guidelines, gazette, PIB, policy book)
+#                    or agreed by two independent sources
+#   single_source  - one source, or a secondary source only
 #   unconfirmed    - believed true, not verified; the engine reports these as VERIFY
 #
+# Scheme status `state`:
+#   active                - open for applications as far as we know
+#   pending_continuation  - approved period ended; continuation awaited (VERIFY)
+#   lapsed                - extension ended, no successor notified (VERIFY; ranked last)
+#   unverified            - continuation not checked (VERIFY)
+#   discontinued          - closed to new applications (FAIL)
+#
 # Check types understood by scheme_dpr/eligibility.py:
-#   state_in, sector_in, requires_tag, excluded_tags, keyword_watch,
-#   project_cost_max, project_cost_min, loan_amount_max, age_range,
-#   education_threshold, new_unit_only, scheme_window, requires_flag,
+#   state_in, district_not_in, sector_in, requires_tag, excluded_tags, keyword_watch,
+#   project_cost_max, project_cost_min, loan_amount_max, working_capital_max_share,
+#   age_range, education_threshold, new_unit_only, scheme_window, requires_flag,
 #   terms_unconfirmed, declaration
 #
-# Money in ₹ lakh. Rates are fractions.
+# Money in ₹ lakh. Rates are fractions. Sources re-checked 2026-11-18.
 
-version: "2026.11.1"
+version: "2026.11.2"
 as_of: "2026-11-18"
 global_notice: >
-  Scheme terms are taken from public 2025-26 sources and change often. Every result
-  must be confirmed with the District Industries Centre (DIC), the implementing
-  agency and the lending bank before an application is filed.
+  Scheme terms are taken from public sources checked on 18 Nov 2026 and change often.
+  PMEGP's approved period ended on 31 Mar 2026 (continuation pending) and PMFME lapsed
+  on 30 Sep 2026. Every result must be confirmed with the District Industries Centre
+  (DIC), the implementing agency and the lending bank before an application is filed.
 
 special_categories: &special
   [sc, st, obc, minority, women, ex_serviceman, transgender, divyang]
+
+# MoMSME O.M. 07.12.2023 enclosing the revised PMEGP guidelines (official mirror)
+pmegp_src: &pmegp_src https://master-msme.digifootprint.gov.in/static/uploads/2025/06/9a440310b5d789b2988e12f7769e15e0.pdf
+tourism_src: &tourism_src https://web-cms.karnatakatourism.org/wp-content/uploads/2025/07/Tourism-Policy-Book.pdf
+smam_src: &smam_src https://agriculture.hp.gov.in/wp-content/uploads/2026/02/SMAM-Revised-Operational-Guidelines-dated-18-12-2025.pdf
+mudra_src: &mudra_src https://taxguru.in/corporate-law/pmmy-loan-limit-doubles-rs-20-lakh-entrepreneurs.html
+cgtmse_src: &cgtmse_src https://knnindia.co.in/news/newsdetails/msme/enhancement-in-guarantee-cover-with-reduction-in-fees-for-msmes
+pmfme_guide: &pmfme_guide https://krishicenter.com/2026/11/08/pmfme-micro-food-processing-subsidy-guide/
+cmegp_src: &cmegp_src https://sarkariyojana.com/karnataka-cm-self-employment-scheme-online-application-form-cmegp-kar-nic/
 
 schemes:
 
@@ -33,12 +52,21 @@ schemes:
     kind: capital_subsidy
     agency: KVIC / KVIB / DIC, through banks
     portal: https://www.kviconline.gov.in/pmegpeportal/
-    source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp
-    as_of: "2025-04-01"
+    source: *pmegp_src
+    as_of: "2023-12-07"
+    status:
+      state: pending_continuation
+      note: >-
+        Approved for 2021-22 to 2025-26 only. A Rajya Sabha reply (Aug 2026) said the scheme was
+        in continuation only up to 31 Mar 2026 and that further subsidy release depends on approval
+        of its continuation; no approval found as of 18 Nov 2026.
+      source: https://kashmirlife.net/pmegp-subsidy-release-put-on-hold-pending-scheme-extension-approval-jammu-kashmir-had-1-46-lakh-beneficiaries-centre-446210/
+      as_of: "2026-08-03"
+      confidence: single_source
     benefit:
       base: project_cost
       special_categories: *special
-      special_if_special_area: true   # NER, hill, border, aspirational districts
+      special_if_special_area: true   # NER, hill, border areas, aspirational districts
       rates:
         general: {rural: 0.25, urban: 0.15}
         special: {rural: 0.35, urban: 0.25}
@@ -48,52 +76,35 @@ schemes:
       cap_lakh: null
       combinable_with_other_capital_subsidy: false
       notes:
-        - Margin money (subsidy) is kept as a 3-year term deposit and adjusted against the loan after the lock-in, if the unit is running.
-        - No interest is charged on the loan portion equal to the subsidy; the model therefore charges interest on the net loan.
-        - Repayment 3-7 years after an initial moratorium set by the bank.
-        - Loans are covered by CGTMSE; no collateral up to ₹10 lakh.
+        - Margin money (subsidy) is kept as a 3-year term deposit in the beneficiary's name and adjusted against the loan after the lock-in, on a positive physical verification.
+        - No interest is paid on the deposit and none is charged on the matching loan amount; the model therefore charges interest on the net loan.
+        - Repayment 3-7 years after a moratorium set by the bank; no collateral for loans up to ₹10 lakh.
+        - Land cost is excluded from project cost; a rented shed counts for at most 3 years' rent.
+        - A 2nd loan for upgradation (up to ₹1 crore manufacturing / ₹25 lakh service, 15% subsidy) is available later to units that repaid the first loan on time.
     rules:
-      - {id: new_unit, check: new_unit_only, text: Only new units (existing units use the 2nd-loan window), source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp, as_of: "2025-04-01", confidence: confirmed}
-      - {id: sector, check: sector_in, params: {allowed: [manufacturing, service]}, text: Manufacturing or service activity (pure trading is not eligible), source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp, as_of: "2025-04-01", confidence: confirmed}
-      - id: project_cap
-        check: project_cost_max
-        params: {by_sector: {manufacturing: 50, service: 20}}
-        text: Project cost up to ₹50 lakh (manufacturing) / ₹20 lakh (service)
-        source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp
-        as_of: "2025-04-01"
-        confidence: confirmed
-      - {id: age, check: age_range, params: {min: 18}, text: Applicant at least 18 years old, source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp, as_of: "2025-04-01", confidence: confirmed}
-      - id: education
-        check: education_threshold
-        params: {by_sector: {manufacturing: 10, service: 5}, level: VIII pass}
-        text: At least VIII pass for projects above ₹10 lakh (manufacturing) / ₹5 lakh (service)
-        source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp
-        as_of: "2025-04-01"
-        confidence: confirmed
+      - {id: new_unit, check: new_unit_only, text: "Only new units; existing units and units that already took a government subsidy are not eligible", source: *pmegp_src, as_of: "2023-12-07", confidence: confirmed}
+      - {id: sector, check: sector_in, params: {allowed: [manufacturing, service]}, text: "Manufacturing or service activity (pure trading only in NER, LWE districts and A&N Islands)", source: *pmegp_src, as_of: "2023-12-07", confidence: confirmed}
+      - {id: project_cap, check: project_cost_max, params: {by_sector: {manufacturing: 50, service: 20}}, text: "Project cost up to ₹50 lakh (manufacturing) / ₹20 lakh (service) for subsidy", source: *pmegp_src, as_of: "2023-12-07", confidence: confirmed}
+      - {id: working_capital, check: working_capital_max_share, params: {by_sector: {manufacturing: 0.40, service: 0.60}}, text: "Working capital at most 40% of project cost (manufacturing) / 60% (service)", source: *pmegp_src, as_of: "2023-12-07", confidence: confirmed}
+      - {id: age, check: age_range, params: {min: 18}, text: "Applicant above 18 years of age; no upper age limit and no income ceiling", source: *pmegp_src, as_of: "2023-12-07", confidence: confirmed}
+      - {id: education, check: education_threshold, params: {by_sector: {manufacturing: 10, service: 5}, level: VIII pass}, text: "At least VIII pass for projects above ₹10 lakh (manufacturing) / ₹5 lakh (service)", source: *pmegp_src, as_of: "2023-12-07", confidence: confirmed}
       - id: negative_list
         check: excluded_tags
-        params: {tags: [liquor, tobacco, intoxicants, meat_slaughter, polythene_under_20_micron, plantation, rickshaw]}
-        text: Not on the PMEGP negative list (e.g. units selling intoxicants such as liquor, beedi, pan or cigarettes; meat slaughter; thin polythene)
-        source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp
-        as_of: "2025-04-01"
+        params: {tags: [liquor, tobacco, intoxicants, meat_slaughter, toddy, polythene_under_75_micron, crop_cultivation, plantation]}
+        text: "Not on the negative list: intoxicants (beedi, pan, cigarettes), tobacco, toddy for sale, slaughtered-meat processing, hotels or dhabas serving liquor, thin polythene, crop cultivation and plantation"
+        source: *pmegp_src
+        as_of: "2023-12-07"
         confidence: confirmed
       - id: negative_keywords
         check: keyword_watch
-        params: {words: [liquor, beer, bar, toddy, tobacco, gutka, cigarette, beedi, slaughter, meat]}
-        text: Idea text mentions an item that may be on the negative list
-        source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp
-        as_of: "2025-04-01"
+        params: {words: [liquor, beer, bar, toddy, tobacco, gutka, cigarette, beedi, slaughter]}
+        text: "Idea text mentions an item that may be on the negative list (non-veg food at hotels and dhabas is allowed; serving liquor is not)"
+        source: *pmegp_src
+        as_of: "2023-12-07"
         confidence: confirmed
-      - id: window
-        check: scheme_window
-        params: {approved_until: "2026-03-31"}
-        text: Scheme approved for FY 2021-22 to 2025-26; continuation for 2026-27 must be confirmed
-        source: https://pib.gov.in/
-        as_of: "2025-04-01"
-        confidence: unconfirmed
-      - {id: one_per_family, check: declaration, text: Only one person per family may get PMEGP assistance; no earlier government subsidy for the same unit, source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp, as_of: "2025-04-01", confidence: confirmed}
-      - {id: edp, check: declaration, text: Entrepreneurship Development Programme (EDP) training must be completed before the subsidy is released, source: https://www.kviconline.gov.in/pmegpeportal/jsp/pmegponline.jsp, as_of: "2025-04-01", confidence: confirmed}
-    # Scheme-specific documents only; the common list is in locales/<lang>.yaml.
+      - {id: udyam, check: requires_flag, params: {flag: udyam_registered, blocking: false}, text: "Udyam registration is mandatory before physical verification and subsidy adjustment", source: *pmegp_src, as_of: "2023-12-07", confidence: confirmed}
+      - {id: one_per_family, check: declaration, text: "Only one person per family (self and spouse) may get PMEGP assistance", source: *pmegp_src, as_of: "2023-12-07", confidence: confirmed}
+      - {id: edp, check: declaration, text: "EDP training (5 days up to ₹5 lakh, 10 days above; none up to ₹2 lakh) must be completed to claim the subsidy", source: *pmegp_src, as_of: "2023-12-07", confidence: confirmed}
     documents:
       - Caste / special-category certificate (if claiming special rates)
       - Educational qualification certificate (VIII pass or above, if required)
@@ -105,10 +116,19 @@ schemes:
     name: PM Formalisation of Micro Food Processing Enterprises (PMFME)
     level: central
     kind: capital_subsidy
-    agency: Ministry of Food Processing Industries; State Nodal Agency (KAPPEC in Karnataka)
+    agency: Ministry of Food Processing Industries; State Nodal Agency in Karnataka
     portal: https://pmfme.mofpi.gov.in/
-    source: https://pmfme.mofpi.gov.in/
-    as_of: "2025-06-01"
+    source: https://www.pib.gov.in/PressReleasePage.aspx?PRID=2264199
+    as_of: "2026-05-22"
+    status:
+      state: lapsed
+      note: >-
+        Extended only to 30 Sep 2026. No further extension or approval of a 2026-31 continuation
+        ("PMFME 2.0") found as of 18 Nov 2026; proposals reportedly include a higher cap. Check
+        the MoFPI portal before applying.
+      source: *pmfme_guide
+      as_of: "2026-11-08"
+      confidence: single_source
     benefit:
       base: project_cost
       special_categories: []
@@ -121,26 +141,15 @@ schemes:
       cap_lakh: 10
       combinable_with_other_capital_subsidy: false
       notes:
-        - Credit-linked subsidy of 35% of eligible project cost, up to ₹10 lakh per unit.
+        - Credit-linked subsidy of 35% of eligible project cost, up to ₹10 lakh per unit, to set up or upgrade a micro food-processing unit.
         - Free DPR preparation and handholding through district resource persons.
+        - SHG members can get seed capital of ₹40,000 each.
     rules:
-      - id: food_processing
-        check: requires_tag
-        params: {any_of: [food_processing]}
-        text: Must be a food-processing unit (e.g. milling, bakery, pickles, dairy, spices); restaurants and food service do not qualify
-        source: https://pmfme.mofpi.gov.in/
-        as_of: "2025-06-01"
-        confidence: confirmed
-      - {id: age, check: age_range, params: {min: 18}, text: Applicant at least 18 years old, source: https://pmfme.mofpi.gov.in/, as_of: "2025-06-01", confidence: confirmed}
-      - {id: education, check: education_threshold, params: {by_sector: {manufacturing: 0, service: 0}, level: VIII pass}, text: At least VIII pass, source: https://pmfme.mofpi.gov.in/, as_of: "2025-06-01", confidence: confirmed}
-      - id: window
-        check: scheme_window
-        params: {approved_until: "2026-09-30"}
-        text: Scheme extension ran to 30 Sep 2026; a PMFME 2.0 is proposed but not confirmed
-        source: https://pmfme.mofpi.gov.in/
-        as_of: "2026-11-18"
-        confidence: single_source
-      - {id: one_per_family, check: declaration, text: One unit per family; applicant must own the enterprise, source: https://pmfme.mofpi.gov.in/, as_of: "2025-06-01", confidence: confirmed}
+      - {id: food_processing, check: requires_tag, params: {any_of: [food_processing]}, text: "Must be a food-processing unit; canteens, hotels, tiffin services, restaurants and other food-service enterprises do not qualify", source: "https://tulm.tripura.gov.in/sites/default/files/2023-10/PMFME_SOP.pdf", as_of: "2023-10-01", confidence: single_source}
+      - {id: age, check: age_range, params: {min: 18}, text: "Applicant above 18 years of age", source: *pmfme_guide, as_of: "2026-11-08", confidence: single_source}
+      - {id: education, check: education_threshold, params: {by_sector: {manufacturing: 0, service: 0}, level: VIII pass}, text: "At least VIII pass", source: *pmfme_guide, as_of: "2026-11-08", confidence: single_source}
+      - {id: odop, check: terms_unconfirmed, text: "New units may have to make the district's One District One Product (ODOP); the current rule is unclear", source: "https://pmfme.mofpi.gov.in/", as_of: "2026-11-18", confidence: unconfirmed}
+      - {id: one_per_family, check: declaration, text: "One unit per family; fewer than 10 workers; applicant must own the enterprise", source: *pmfme_guide, as_of: "2026-11-08", confidence: single_source}
     documents:
       - FSSAI registration / licence
       - Proof of an existing or proposed food-processing activity (photos, purchase bills)
@@ -151,112 +160,118 @@ schemes:
     level: state
     kind: capital_subsidy
     agency: Karnataka State Khadi and Village Industries Board (KVIB) / DIC
-    portal: https://kkvib.karnataka.gov.in/
-    source: https://kkvib.karnataka.gov.in/
-    as_of: "2025-04-01"
+    portal: https://cmegp.kar.nic.in/
+    source: https://starofmysore.com/?p=178150
+    as_of: "2019-06-30"
+    status:
+      state: discontinued
+      note: >-
+        Reported discontinued from FY 2020-21 with applicants redirected to PMEGP (secondary
+        source; the official portal could not be reached). Not to be confused with Maharashtra's
+        CMEGP. Kept for reference; confirm with KVIB / DIC.
+      source: *cmegp_src
+      as_of: "2026-08-23"
+      confidence: single_source
     benefit:
       base: project_cost
-      special_categories: *special
+      special_categories: [sc, st, obc, minority, women, ex_serviceman, divyang]
       rates:
-        general: {rural: 0.25, urban: 0.15}
-        special: {rural: 0.35, urban: 0.25}
+        general: {rural: 0.25, urban: 0.25}
+        special: {rural: 0.35, urban: 0.35}
       own_contribution:
         general: 0.10
         special: 0.05
-      cap_lakh: null
+      cap_lakh_by_group: {general: 2.5, special: 3.5}
       combinable_with_other_capital_subsidy: false
       notes:
-        - State counterpart of PMEGP for smaller projects; terms set by KVIB each year.
+        - "Last known terms (2019): 25% / 35% subsidy capped at ₹2.5 / ₹3.5 lakh on projects up to ₹10 lakh."
     rules:
-      - {id: state, check: state_in, params: {states: [Karnataka]}, text: Unit located in Karnataka, source: https://kkvib.karnataka.gov.in/, as_of: "2025-04-01", confidence: confirmed}
-      - {id: sector, check: sector_in, params: {allowed: [manufacturing, service]}, text: Manufacturing or service activity, source: https://kkvib.karnataka.gov.in/, as_of: "2025-04-01", confidence: single_source}
-      - {id: project_cap, check: project_cost_max, params: {all: 10}, text: Project cost up to ₹10 lakh, source: https://kkvib.karnataka.gov.in/, as_of: "2025-04-01", confidence: single_source}
-      - id: age
-        check: age_range
-        params: {min: 21, max: 35, special_max: 45}
-        text: Age 21-35 (general), up to 45 for special categories
-        source: https://kkvib.karnataka.gov.in/
-        as_of: "2025-04-01"
-        confidence: single_source
-      - {id: terms, check: terms_unconfirmed, text: Subsidy rates and whether the scheme is open this year must be confirmed with KVIB / DIC, source: https://kkvib.karnataka.gov.in/, as_of: "2025-04-01", confidence: unconfirmed}
-      - {id: one_per_family, check: declaration, text: One unit per family; no earlier government subsidy, source: https://kkvib.karnataka.gov.in/, as_of: "2025-04-01", confidence: single_source}
+      - {id: state, check: state_in, params: {states: [Karnataka]}, text: "Unit located in Karnataka", source: "https://starofmysore.com/?p=178150", as_of: "2019-06-30", confidence: confirmed}
+      - {id: project_cap, check: project_cost_max, params: {all: 10}, text: "Project cost up to ₹10 lakh", source: *cmegp_src, as_of: "2026-08-23", confidence: single_source}
+      - {id: age, check: age_range, params: {min: 21, max: 35, special_max: 45}, text: "Age up to 35 (general), up to 45 for special categories; lower limit 18 or 21", source: "https://starofmysore.com/?p=178150", as_of: "2019-06-30", confidence: single_source}
+      - {id: one_per_family, check: declaration, text: "One unit per family; no earlier government subsidy", source: *cmegp_src, as_of: "2026-08-23", confidence: single_source}
     documents:
       - Age proof and caste certificate (if applicable)
       - Karnataka domicile proof
-      - Rural area certificate (for rural rates)
 
   # ---------------------------------------------------------------- SMAM
   - id: smam
-    name: Sub-Mission on Agricultural Mechanization (SMAM)
+    name: Sub-Mission on Agricultural Mechanization (SMAM, under PM-RKVY)
     level: central
     kind: capital_subsidy
     agency: Department of Agriculture, Karnataka (via Raitha Samparka Kendra)
     portal: https://agrimachinery.nic.in/
-    source: https://agrimachinery.nic.in/
-    as_of: "2025-04-01"
+    source: *smam_src
+    as_of: "2025-12-18"
+    status:
+      state: unverified
+      note: Runs under the PM-RKVY umbrella; whether PM-RKVY continues beyond 2025-26 was not checked.
+      source: https://static.pib.gov.in/WriteReadData/specificdocs/documents/2026/jul/doc202679916301.pdf
+      as_of: "2026-07-09"
+      confidence: unconfirmed
     benefit:
       base: project_cost
       special_categories: [sc, st, women, small_marginal_farmer]
       rates:
         general: {rural: 0.40, urban: 0.40}
         special: {rural: 0.50, urban: 0.50}
+      rate_by_tag:
+        custom_hiring_centre: 0.40   # every category
       own_contribution:
         general: 0.10
         special: 0.10
       cap_lakh: null
       combinable_with_other_capital_subsidy: false
       notes:
-        - Individual farmers get 40-50% on listed machines (caps per machine type); Custom Hiring Centres get 40% of project cost.
-        - Now run as a component of RKVY in many states; check the current Karnataka circular.
+        - "Individual farmers: 50% (small and marginal, SC/ST, women) or 40% (others) of machine cost, within machine-wise caps (Annexure-I)."
+        - "Custom Hiring Centres: 40% of project cost for projects up to ₹250 lakh, credit-linked and back-ended; DPR needed above ₹50 lakh."
+        - Expensive machines such as combine harvesters are meant to go through Custom Hiring Centres.
     rules:
-      - id: farm_machinery
-        check: requires_tag
-        params: {any_of: [farm_machinery, custom_hiring_centre]}
-        text: Only for purchase of farm machinery or a Custom Hiring Centre
-        source: https://agrimachinery.nic.in/
-        as_of: "2025-04-01"
-        confidence: confirmed
-      - {id: caps, check: terms_unconfirmed, text: Per-machine subsidy caps and the current Karnataka rate must be checked, source: https://agrimachinery.nic.in/, as_of: "2025-04-01", confidence: unconfirmed}
+      - {id: farm_machinery, check: requires_tag, params: {any_of: [farm_machinery, custom_hiring_centre]}, text: "Only for purchase of farm machinery or a Custom Hiring Centre", source: *smam_src, as_of: "2025-12-18", confidence: confirmed}
+      - {id: chc_cap, check: project_cost_max, params: {all: 250}, text: "Custom Hiring Centre projects up to ₹250 lakh", source: *smam_src, as_of: "2025-12-18", confidence: confirmed}
+      - {id: machine_caps, check: terms_unconfirmed, text: "Machine-wise subsidy caps (Annexure-I) and the current Karnataka circular must be checked", source: *smam_src, as_of: "2025-12-18", confidence: unconfirmed}
     documents:
       - Land records (RTC / pahani)
       - Quotation from an empanelled machinery dealer
 
   # ---------------------------------------------------------------- Karnataka Tourism
   - id: ka_tourism_wayside
-    name: Karnataka Tourism Policy 2024-29 - wayside amenities incentive
+    name: Karnataka Tourism Policy 2024-29 - wayside amenities capital subsidy
     level: state
     kind: capital_subsidy
-    agency: Department of Tourism, Karnataka
+    agency: Department of Tourism, Karnataka (District Tourism Committee up to ₹5 crore)
     portal: https://karnatakatourism.org/
-    source: https://karnatakatourism.org/
-    as_of: "2025-04-01"
+    source: *tourism_src
+    as_of: "2024-11-07"
+    status:
+      state: active
+      note: Policy period 2024-29 (GO dated 07.11.2024). The subsidy is paid after the unit starts operating.
+      source: *tourism_src
+      as_of: "2024-11-07"
+      confidence: confirmed
     benefit:
-      base: project_cost
-      special_categories: *special
-      # Earlier policy (2020-26) gave 25% up to ₹2 crore for wayside amenities.
-      # The 2024-29 rate is not confirmed, so the model plans with 0.
+      base: project_cost   # strictly "eligible project cost": excludes land, working capital, furniture, utensils
+      special_categories: [women, sc, st, divyang]
       rates:
-        general: {rural: 0.0, urban: 0.0}
-        special: {rural: 0.0, urban: 0.0}
-      reported_rate_text: "25% capital subsidy up to ₹2 crore under the 2020-26 policy; 2024-29 rate not confirmed"
+        general: {rural: 0.25, urban: 0.25}
+        special: {rural: 0.30, urban: 0.30}
       own_contribution:
         general: 0.10
         special: 0.10
       cap_lakh: 200
       combinable_with_other_capital_subsidy: false
       notes:
-        - Paid after the unit starts operating, so plan without it.
-        - One source cites a large minimum investment; check before applying.
+        - 25% of eligible project cost (+5% for women, SC, ST or differently-abled entrepreneurs), capped at ₹2 crore; minimum eligible project cost ₹2 crore.
+        - Eligible project cost excludes land, working capital, pre-operative expenses, furniture, cutlery and utensils, and vehicles.
+        - Also 50% stamp duty exemption, registration charges and land-conversion fee reimbursed, and industry status for power and property tax.
+        - Paid after operations start, so plan cash flow without it.
     rules:
-      - {id: state, check: state_in, params: {states: [Karnataka]}, text: Unit located in Karnataka, source: https://karnatakatourism.org/, as_of: "2025-04-01", confidence: confirmed}
-      - id: wayside
-        check: requires_tag
-        params: {any_of: [wayside_amenity, tourism]}
-        text: Wayside amenity or tourism project on a recognised route
-        source: https://karnatakatourism.org/
-        as_of: "2025-04-01"
-        confidence: single_source
-      - {id: terms, check: terms_unconfirmed, text: 2024-29 subsidy rate and minimum investment are not confirmed, source: https://karnatakatourism.org/, as_of: "2025-04-01", confidence: unconfirmed}
+      - {id: state, check: state_in, params: {states: [Karnataka]}, text: "Unit located in Karnataka", source: *tourism_src, as_of: "2024-11-07", confidence: confirmed}
+      - {id: not_bengaluru, check: district_not_in, params: {districts: [Bengaluru Urban, Bangalore Urban]}, text: "No capital subsidy in Bengaluru Urban district", source: *tourism_src, as_of: "2024-11-07", confidence: confirmed}
+      - {id: wayside, check: requires_tag, params: {any_of: [wayside_amenity, tourism]}, text: "Wayside amenity or other listed tourism project", source: *tourism_src, as_of: "2024-11-07", confidence: confirmed}
+      - {id: min_epc, check: project_cost_min, params: {lakh: 200}, text: "Eligible project cost at least ₹2 crore (land, working capital and furniture excluded)", source: *tourism_src, as_of: "2024-11-07", confidence: confirmed}
+      - {id: definition, check: terms_unconfirmed, text: "Minimum facilities that count as a wayside amenity are set in operational guidelines not found online", source: *tourism_src, as_of: "2024-11-07", confidence: unconfirmed}
+      - {id: registration, check: declaration, text: "Project must be registered with the Department of Tourism (KTTF Act 2015)", source: *tourism_src, as_of: "2024-11-07", confidence: confirmed}
     documents:
       - Registration with the Department of Tourism
       - Approved building plan
@@ -268,8 +283,14 @@ schemes:
     kind: loan
     agency: Banks, RRBs, NBFCs, MFIs (refinanced by MUDRA / SIDBI)
     portal: https://www.mudra.org.in/
-    source: https://www.mudra.org.in/
-    as_of: "2025-04-01"
+    source: *mudra_src
+    as_of: "2024-10-24"
+    status:
+      state: active
+      note: Credit guarantee fund (CGFMU) extended to 31 Mar 2031 by the Cabinet on 11 Nov 2026.
+      source: https://ddindia.co.in/2026/11/cabinet-extends-credit-guarantee-fund-for-micro-units-until-2031-approves-rs-5000-crore-corpus/
+      as_of: "2026-11-11"
+      confidence: confirmed
     benefit:
       tiers:
         - {name: Shishu, max_lakh: 0.5}
@@ -277,18 +298,12 @@ schemes:
         - {name: Tarun, max_lakh: 10}
         - {name: Tarun Plus, max_lakh: 20, requires_flag: prior_mudra_tarun_repaid}
       notes:
-        - Collateral-free; guaranteed under CGFMU.
-        - No capital subsidy - it is a loan route, usable alongside or instead of a subsidy-linked loan.
+        - Collateral-free; guaranteed under CGFMU, whose annual fee was reported cut from 1% to 0.75% in Nov 2026.
+        - No capital subsidy - a loan route, usable alongside or instead of a subsidy-linked loan.
     rules:
-      - {id: sector, check: sector_in, params: {allowed: [manufacturing, service, trading]}, text: Non-farm income-generating micro enterprise, source: https://www.mudra.org.in/, as_of: "2025-04-01", confidence: confirmed}
-      - {id: loan_cap, check: loan_amount_max, params: {lakh: 20}, text: Loan up to ₹20 lakh (Tarun Plus), source: https://www.mudra.org.in/, as_of: "2025-04-01", confidence: confirmed}
-      - id: tarun_plus
-        check: requires_flag
-        params: {flag: prior_mudra_tarun_repaid, when_loan_above: 10}
-        text: Loans above ₹10 lakh (Tarun Plus) only for borrowers who have repaid an earlier Tarun loan
-        source: https://www.mudra.org.in/
-        as_of: "2025-04-01"
-        confidence: confirmed
+      - {id: sector, check: sector_in, params: {allowed: [manufacturing, service, trading]}, text: "Income-generating micro enterprise in manufacturing, trading or services", source: *mudra_src, as_of: "2024-10-24", confidence: single_source}
+      - {id: loan_cap, check: loan_amount_max, params: {lakh: 20}, text: "Loan up to ₹20 lakh (Tarun Plus)", source: *mudra_src, as_of: "2024-10-24", confidence: confirmed}
+      - {id: tarun_plus, check: requires_flag, params: {flag: prior_mudra_tarun_repaid, when_loan_above: 10}, text: "Loans above ₹10 lakh (Tarun Plus) only for borrowers who have repaid an earlier Tarun loan", source: *mudra_src, as_of: "2024-10-24", confidence: confirmed}
     documents:
       - Business address proof
 
@@ -299,17 +314,24 @@ schemes:
     kind: guarantee
     agency: CGTMSE (SIDBI / Ministry of MSME), through the lending bank
     portal: https://www.cgtmse.in/
-    source: https://www.cgtmse.in/
-    as_of: "2025-04-01"
+    source: *cgtmse_src
+    as_of: "2025-03-25"
+    status:
+      state: active
+      note: Guarantee ceiling ₹10 crore for guarantees approved from 1 Apr 2025.
+      source: *cgtmse_src
+      as_of: "2025-03-25"
+      confidence: confirmed
     benefit:
-      coverage_text: "75-85% of the loan guaranteed (higher for micro loans and for women / SC / ST borrowers)"
-      fee_text: "Annual guarantee fee from about 0.37% for small loans; usually passed on by the bank"
+      coverage_text: "Guarantee cover reported at 75-85% of the loan (current bands by category not confirmed)"
+      fee_text: "Annual guarantee fee 0.37% for loans up to ₹10 lakh, 0.55% from ₹10 to 50 lakh; usually borne by the borrower"
       notes:
         - Lets the bank lend without collateral or third-party guarantee.
-        - PMEGP loans are covered.
+        - PMEGP borrowers can opt for CGTMSE cover by paying the fee.
+        - RBI reportedly barred collateral on MSE loans up to ₹20 lakh from Feb 2026 (single source) - ask the bank.
     rules:
-      - {id: sector, check: sector_in, params: {allowed: [manufacturing, service, trading]}, text: "Micro or small enterprise in manufacturing, services or retail trade", source: https://www.cgtmse.in/, as_of: "2025-04-01", confidence: confirmed}
-      - {id: loan_cap, check: loan_amount_max, params: {lakh: 1000}, text: Credit facility up to ₹10 crore (limit raised from ₹5 crore in 2025), source: https://www.cgtmse.in/, as_of: "2025-04-01", confidence: single_source}
-      - {id: udyam, check: requires_flag, params: {flag: udyam_registered, blocking: false}, text: "Udyam registration (free, online) is needed before the loan", source: https://udyamregistration.gov.in/, as_of: "2025-04-01", confidence: confirmed}
+      - {id: sector, check: sector_in, params: {allowed: [manufacturing, service, trading]}, text: "Micro or small enterprise in manufacturing, services or retail trade", source: *cgtmse_src, as_of: "2025-03-25", confidence: single_source}
+      - {id: loan_cap, check: loan_amount_max, params: {lakh: 1000}, text: "Credit facility up to ₹10 crore", source: *cgtmse_src, as_of: "2025-03-25", confidence: confirmed}
+      - {id: udyam, check: requires_flag, params: {flag: udyam_registered, blocking: false}, text: "Udyam registration (free, online) is needed before the loan", source: "https://udyamregistration.gov.in/", as_of: "2025-03-25", confidence: confirmed}
     documents:
       - Bank's loan application form

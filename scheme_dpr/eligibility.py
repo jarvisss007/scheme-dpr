@@ -57,6 +57,8 @@ class SchemeResult:
     as_of: str
     verdict: Verdict
     rules: list[RuleResult]
+    status_state: str = "active"
+    status_note: str = ""
     group: str = "general"  # general | special
     subsidy_pct: float = 0.0
     subsidy_cap: float | None = None
@@ -102,7 +104,10 @@ def load_rules(path: str | Path | None = None) -> dict[str, Any]:
     return data
 
 
-REQUIRED_SCHEME_KEYS = {"id", "name", "level", "kind", "agency", "source", "as_of", "benefit", "rules"}
+REQUIRED_SCHEME_KEYS = {"id", "name", "level", "kind", "agency", "source", "as_of", "status", "benefit", "rules"}
+REQUIRED_STATUS_KEYS = {"state", "note", "source", "as_of", "confidence"}
+# Order used to rank schemes when several fit: a live scheme beats one awaiting continuation.
+STATUS_RANK = {"active": 0, "unverified": 1, "pending_continuation": 1, "lapsed": 2, "discontinued": 3}
 REQUIRED_RULE_KEYS = {"id", "check", "text", "source", "as_of", "confidence"}
 ALLOWED_RULE_KEYS = REQUIRED_RULE_KEYS | {"params"}
 CONFIDENCE = {"confirmed", "single_source", "unconfirmed"}
@@ -117,6 +122,14 @@ def validate_rules(data: dict[str, Any]) -> None:
             raise ValueError(f"scheme {s.get('id')}: missing {sorted(missing)}")
         if s["id"] in ids:
             raise ValueError(f"duplicate scheme id {s['id']}")
+        st = s["status"]
+        missing = REQUIRED_STATUS_KEYS - st.keys()
+        if missing:
+            raise ValueError(f"scheme {s['id']}: status missing {sorted(missing)}")
+        if st["state"] not in STATUS_RANK:
+            raise ValueError(f"scheme {s['id']}: status.state must be one of {sorted(STATUS_RANK)}")
+        if st["confidence"] not in CONFIDENCE:
+            raise ValueError(f"scheme {s['id']}: status.confidence must be one of {sorted(CONFIDENCE)}")
         ids.add(s["id"])
         for r in s["rules"]:
             missing = REQUIRED_RULE_KEYS - r.keys()
@@ -157,6 +170,21 @@ def c_state_in(ctx, p, s):
     st = ctx.project.location.state
     ok = st.lower() in [x.lower() for x in p["states"]]
     return (Status.PASS if ok else Status.FAIL), f"unit is in {st}"
+
+
+def c_district_not_in(ctx, p, s):
+    d = ctx.project.location.district
+    bad = d.lower() in [x.lower() for x in p["districts"]]
+    return (Status.FAIL if bad else Status.PASS), f"district is {d}"
+
+
+def c_working_capital_max_share(ctx, p, s):
+    limit = _by_sector(p, ctx.project.activity.sector.value)
+    if limit is None or ctx.project_cost <= 0:
+        return Status.PASS, "no limit for this sector"
+    share = ctx.project.setup_cost.working_capital / ctx.project_cost
+    ok = share <= limit + 1e-9
+    return (Status.PASS if ok else Status.FAIL), f"working capital {share:.0%} of project cost vs limit {limit:.0%}"
 
 
 def c_sector_in(ctx, p, s):
@@ -271,6 +299,8 @@ def c_declaration(ctx, p, s):
 
 CHECKS: dict[str, Check] = {
     "state_in": c_state_in,
+    "district_not_in": c_district_not_in,
+    "working_capital_max_share": c_working_capital_max_share,
     "sector_in": c_sector_in,
     "requires_tag": c_requires_tag,
     "excluded_tags": c_excluded_tags,
@@ -291,8 +321,25 @@ CHECKS: dict[str, Check] = {
 # ---------------------------------------------------------------- evaluation
 
 
+STATUS_TEXT = {
+    "active": (Status.PASS, "Scheme open for applications"),
+    "unverified": (Status.VERIFY, "Scheme continuation not verified"),
+    "pending_continuation": (Status.VERIFY, "Approved period ended; continuation awaited"),
+    "lapsed": (Status.VERIFY, "Scheme lapsed; no successor notified yet"),
+    "discontinued": (Status.FAIL, "Scheme discontinued for new applications"),
+}
+
+
+def status_rule(scheme: dict[str, Any]) -> RuleResult:
+    st = scheme["status"]
+    status, text = STATUS_TEXT[st["state"]]
+    if status is Status.PASS and st["confidence"] == "unconfirmed":
+        status = Status.VERIFY
+    return RuleResult("status", text, status, " ".join(str(st["note"]).split()), st["source"], str(st["as_of"]), st["confidence"])
+
+
 def evaluate_scheme(scheme: dict[str, Any], ctx: Context) -> SchemeResult:
-    results = []
+    results = [status_rule(scheme)]
     for r in scheme["rules"]:
         status, detail = CHECKS[r["check"]](ctx, r.get("params", {}), scheme)
         # A rule we have not confirmed can't give a clean PASS.
@@ -312,6 +359,7 @@ def evaluate_scheme(scheme: dict[str, Any], ctx: Context) -> SchemeResult:
         id=scheme["id"], name=scheme["name"], kind=scheme["kind"], level=scheme["level"],
         agency=scheme["agency"], portal=scheme.get("portal", scheme["source"]), source=scheme["source"],
         as_of=str(scheme["as_of"]), verdict=verdict, rules=results,
+        status_state=scheme["status"]["state"], status_note=results[0].detail,
         notes=list(b.get("notes", [])), documents=list(scheme.get("documents", [])),
     )
 
@@ -320,17 +368,17 @@ def evaluate_scheme(scheme: dict[str, Any], ctx: Context) -> SchemeResult:
         area = ctx.project.location.area.value
         res.group = g
         res.subsidy_pct = float(b["rates"][g][area])
-        res.subsidy_cap = b.get("cap_lakh")
+        for tag, rate in (b.get("rate_by_tag") or {}).items():
+            if tag in ctx.project.activity.tags:
+                res.subsidy_pct = float(rate)
+        res.subsidy_cap = (b.get("cap_lakh_by_group") or {}).get(g, b.get("cap_lakh"))
         res.own_pct = float(b["own_contribution"][g])
         amt = ctx.project_cost * res.subsidy_pct
         if res.subsidy_cap is not None:
             amt = min(amt, res.subsidy_cap)
         res.subsidy_amount = amt
         cap = f", capped at ₹{res.subsidy_cap:g} lakh" if res.subsidy_cap is not None else ""
-        if b.get("reported_rate_text") and res.subsidy_pct == 0:
-            res.benefit_text = f"{b['reported_rate_text']}; planned at 0%"
-        else:
-            res.benefit_text = f"{res.subsidy_pct:.0%} capital subsidy ({g}, {area}){cap}; own contribution {res.own_pct:.0%}"
+        res.benefit_text = f"{res.subsidy_pct:.0%} capital subsidy ({g}, {area}){cap}; own contribution {res.own_pct:.0%}"
     elif scheme["kind"] == "loan":
         res.benefit_text = _loan_tier_text(b, ctx)
     elif scheme["kind"] == "guarantee":
@@ -370,8 +418,9 @@ def pick_subsidy_scheme(results: list[SchemeResult], forced: str = "auto") -> Sc
     if not usable:
         return None
     order = {r.id: i for i, r in enumerate(caps)}
-    # Largest subsidy; then fewer open questions; then file order.
-    return sorted(usable, key=lambda r: (-round(r.subsidy_amount, 6), len(r.to_verify), order[r.id]))[0]
+    # A live scheme first; then the largest subsidy; then fewer open questions; then file order.
+    return sorted(usable, key=lambda r: (STATUS_RANK[r.status_state], -round(r.subsidy_amount, 6),
+                                         len(r.to_verify), order[r.id]))[0]
 
 
 def evaluate(project: Project, project_cost: float, rules: dict[str, Any] | None = None,
