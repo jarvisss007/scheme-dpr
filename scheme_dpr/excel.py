@@ -98,6 +98,12 @@ def build_workbook(p: Project, m: ModelResult, ev: Evaluation, s: Strings) -> tu
     _write_monthly(wmo, p, m, s, cm, rows)
     _write_schemes(wsch, ev, s)
     _write_readme(readme, p, ev, s)
+    for ws in wb.worksheets:  # print one page wide, landscape - how bank officers read it
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
     wb.active = 2  # open on the Model sheet
     return wb, cm
 

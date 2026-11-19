@@ -11,6 +11,21 @@ Turn a small-business idea in Karnataka into a **bank-ready government-scheme ap
 
 **Who it is for:** district consultants, CAs and PMFME / PMEGP resource persons who write these reports by hand today, usually from a stale Excel template and a Word file.
 
+![The generated DPR: cover with review warnings, project at a glance, cost and means of finance, 5-year projections](docs/dpr_pages.png)
+
+## What it caught on the first real case
+
+The test case is a ₹19.89 lakh highway food kiosk that had already been worked out by hand in a spreadsheet. The tool reproduces that spreadsheet to the paisa, and then finds three things the spreadsheet did not show:
+
+1. **Year-1 cash runs out.** Sales build up over the first months, but staff, the site owner's revenue share and loan payments start in month 1. Month-end cash goes negative in month 2 and stays negative through month 8, at worst −₹1.05 lakh. The annual view only shows a Year-1 DSCR of 1.28x. The report tells the applicant to ask for a cash-credit or overdraft limit before opening.
+
+   ![Year 1 month by month: cash goes negative from month 2 to month 8](docs/workbook_year1_monthly.png)
+
+2. **The cushion is thin where it matters.** Break-even is 57 meals a day against a plan of 120, which looks safe. But if volumes come in 10% lower, Year-1 DSCR falls to 0.68x; at 20% lower it goes negative. The driver is fixed staff cost (₹18 lakh a year for 10 people), not the loan.
+3. **The scheme it depends on is in limbo.** PMEGP fits on every rule, but its approved period ended on 31 Mar 2026 and continuation had not been approved as of Nov 2026. PMFME lapsed on 30 Sep 2026. The Karnataka scheme people still cite (CMEGP) is reported discontinued. The tool shows scheme status as the first check, not a footnote.
+
+![Model sheet: live formulas, DSCR flagged below the bank norm](docs/workbook_model.png)
+
 ---
 
 ## Quick start

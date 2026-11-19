@@ -3,6 +3,7 @@ name = "scheme-dpr"
 version = "0.1.0"
 description = "Turn a small-business idea in Karnataka into a scheme-matched, bank-ready project report (DPR) with a live 5-year financial model."
 readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.11"
 dependencies = [
     "pyyaml>=6",
