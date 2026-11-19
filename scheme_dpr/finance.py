@@ -211,3 +211,47 @@ def breakeven(p: Project, res: ModelResult) -> tuple[float | None, str | None]:
     if per_unit_year <= 0:
         return None, s.name
     return need / per_unit_year, s.name
+
+
+# ---------------------------------------------------------------- sensitivity
+
+SCENARIOS = [
+    ("base", 1.0, 1.0, 1.0),
+    ("volume_-10", 0.9, 1.0, 1.0),
+    ("volume_-20", 0.8, 1.0, 1.0),
+    ("price_-10", 1.0, 0.9, 1.0),
+    ("costs_+10", 1.0, 1.0, 1.1),
+]
+
+
+@dataclass
+class Sensitivity:
+    key: str
+    year3_ebitda: float
+    min_dscr: float | None
+    avg_dscr: float | None
+    payback_year: int | None
+
+
+def sensitivity(p: Project, own_pct: float, subsidy_pct: float, subsidy_cap: float | None = None) -> list[Sensitivity]:
+    """Re-run the model with volumes, prices or running costs shocked. Material cost
+    stays a % of sales; fixed and staff costs scale with the cost shock."""
+    out = []
+    for key, vol, price, cost in SCENARIOS:
+        q = p.model_copy(deep=True)
+        for st in q.revenue:
+            if st.is_volume:
+                st.per_day *= vol  # type: ignore[operator]
+                st.price_rs *= price  # type: ignore[operator]
+            else:
+                st.annual_lakh *= price  # type: ignore[operator]
+        c = q.costs
+        c.staff.monthly_lakh *= cost
+        c.staff.manager_monthly_lakh *= cost
+        c.rent_annual_lakh *= cost
+        c.electricity.rate_rs *= cost
+        for o in c.other:
+            o.amount *= cost
+        m = build_model(q, own_pct, subsidy_pct, subsidy_cap)
+        out.append(Sensitivity(key, m.years[2].ebitda, m.min_dscr, m.avg_dscr, m.payback_year))
+    return out

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from .eligibility import Evaluation, Status
-from .finance import ModelResult
+from .finance import ModelResult, sensitivity
 from .i18n import Strings
 from .models import Project
 from .narrative import Narrative
@@ -265,6 +265,12 @@ def build_report(p: Project, m: ModelResult, ev: Evaluation, narr: Narrative, s:
                                              planned=f"{prim.per_day:g}") if prim and m.breakeven_units_per_day else "-"),
                ]),
                P(s("dpr.breakeven_basis"), "note")]
+    sens = sensitivity(p, m.finance.own_pct, m.finance.subsidy_pct, m.finance.subsidy_cap)
+    blocks += [H(s("dpr.sens_title"), 2), P(s("dpr.sens_intro"), "note"),
+               T([s("dpr.scenario"), s("dpr.sens_ebitda"), s("dpr.sens_min_dscr"), s("dpr.sens_avg_dscr"), s("dpr.f.payback")],
+                 [[s(f"dpr.sens.{x.key}"), lakh(x.year3_ebitda), times(x.min_dscr), times(x.avg_dscr),
+                   s("dpr.year_n", n=x.payback_year) if x.payback_year else s("dpr.beyond5")] for x in sens],
+                 bold_rows=[0])]
     below = [r.year for r in y if r.dscr is not None and r.dscr < a.min_dscr]
     if below:
         blocks.append(P(s("dpr.dscr_warning", years=", ".join(str(x) for x in below), norm=times(a.min_dscr)), "warning"))

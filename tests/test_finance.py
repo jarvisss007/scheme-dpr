@@ -169,3 +169,16 @@ def test_moratorium_must_be_inside_tenor(example_data):
     example_data["finance"]["moratorium_months"] = 60
     with pytest.raises(ValidationError):
         Project.model_validate(example_data)
+
+
+def test_sensitivity(example):
+    from scheme_dpr.finance import sensitivity
+
+    rows = {r.key: r for r in sensitivity(example, 0.10, 0.25)}
+    base = build_model(example, 0.10, 0.25)
+    assert rows["base"].min_dscr == pytest.approx(base.min_dscr)
+    assert rows["base"].year3_ebitda == pytest.approx(base.years[2].ebitda)
+    assert rows["volume_-20"].year3_ebitda < rows["volume_-10"].year3_ebitda < rows["base"].year3_ebitda
+    assert rows["price_-10"].year3_ebitda < rows["base"].year3_ebitda
+    assert rows["costs_+10"].year3_ebitda < rows["base"].year3_ebitda
+    assert example.revenue[0].per_day == 120  # input not mutated

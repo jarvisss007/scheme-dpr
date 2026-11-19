@@ -175,6 +175,19 @@ dpr:
     DSCR is below the usual bank norm of {norm} in year(s) {years}. Expect the bank to ask for a
     moratorium, a longer tenor, more own contribution or a lower opening cost.
 
+  sens_title: Sensitivity
+  sens_intro: The same model re-run with one assumption changed at a time. Material cost stays a share of sales.
+  scenario: Scenario
+  sens_ebitda: Year-3 EBITDA
+  sens_min_dscr: Lowest DSCR
+  sens_avg_dscr: Average DSCR
+  sens:
+    base: Base case
+    volume_-10: Volumes 10% lower
+    volume_-20: Volumes 20% lower
+    price_-10: Prices 10% lower
+    costs_+10: Running costs 10% higher
+
   role: Role
   number: Number
   emp:
