@@ -100,7 +100,7 @@ See `example.yaml`; every field is documented in `scheme_dpr/models.py`. Main bl
 ## Tests
 
 ```bash
-python -m pytest -q        # 99 tests; LibreOffice and Node tests skip if the tools are missing
+python -m pytest -q        # 100 tests; LibreOffice and Node tests skip if the tools are missing
 ```
 
 * `test_finance.py`: every line of the worked example, moratorium splits, subsidy caps, zero-loan and loss years, input validation.
@@ -118,6 +118,6 @@ python -m pytest -q        # 99 tests; LibreOffice and Node tests skip if the to
 
 1. **Five real reports with real consultants.** Sit with two DIC-empanelled consultants or PMFME resource persons in Haveri / Dharwad, run their last few cases through it, and measure time saved and what the bank or DIC sent back. That is the only validation that matters.
 2. **A named owner for `schemes.yaml`**, with a monthly check of the PMEGP / PMFME portals and Karnataka circulars, and a changelog. Stale scheme terms are the main way this tool can hurt someone.
-3. **Bank-format extras**: CMA-style monthly cash flow for Year 1, assets schedule and WDV tax depreciation, sensitivity table (±10% volume / price).
+3. **Bank-format extras**: CMA-style monthly cash flow for Year 1, assets schedule and WDV tax depreciation. (A sensitivity table for volume, price and cost shocks is already in section 7.)
 4. **Kannada output** reviewed by a native speaker who knows DIC terminology.
 5. A simple web form in front of the YAML for consultants who don't edit files.
